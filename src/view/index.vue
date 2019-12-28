@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:32:57
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2019-12-26 15:07:13
+ * @LastEditTime : 2019-12-28 16:36:29
  -->
 <template>
 	<div class="main">
@@ -84,18 +84,7 @@ export default {
 				console.log(threeMapInstance.scene);
 				console.log(threeMapInstance.camera);
 				// 整正区域中心点经过旋转后的位置
-				// const areaGroup = threeMapInstance.areaGroup.clone();
-				// debugger
-				// areaGroup.children.forEach((obj) => {
-				// 	if (obj.type === "Mesh") {
-				// 		const [x, y, z] = obj.userData.d3Centroid;
-				// 		const p = new THREE.Vector3(x, y, z);
-				// 		obj.userData.d3Centroid = p.applyMatrix4(areaGroup.matrixWorld).toArray();
-				// 	}
-				// });
-				// console.log(threeMapInstance.areaGroup);
-				// return 
-				threeMapInstance.exportGLTF([threeMapInstance.areaGroup, threeMapInstance.camera]);
+				threeMapInstance.exportGLTF([threeMapInstance.unionAreaGroup, threeMapInstance.camera]);
 			}
 		},
 		// 导出区域并集geojson

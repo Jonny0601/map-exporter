@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 14:27:13
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2019-12-26 17:03:39
+ * @LastEditTime : 2019-12-28 17:36:09
  */
 import BaseMap from "./BaseMap"
 import * as d3 from "d3-geo";
@@ -23,8 +23,11 @@ export default class CreateMapFromGeoJson extends BaseMap {
 	// 初始化属性
 	initMapProperty() {
 		this.vector3Json = []; // 经过解析转换后的geojson数据
-		this.extrudeHeight = 1; // 多边形的挤压高度
+		this.extrudeHeight = 0.5; // 多边形的挤压高度
+		this.baseExtrudeHeight = 0.5; // 初始多边形的挤压高度
+		this.initColor = "#3899ee"; // 初始多边形颜色
 		this.areaGroup = new THREE.Group(); // 多边形区域组
+		this.unionAreaGroup = new THREE.Group(); // 多边形区域组
 		this.mapData = null; // geojson源数据
         this.mapCenter = null; // geojson表示的形状的中心位置
         this.isEdit = false; // 是否处于编辑状态
@@ -33,12 +36,24 @@ export default class CreateMapFromGeoJson extends BaseMap {
     
     // 绘制区域地图
     drawAreaMap(mapData) {
+        const polygonUnion = this.computedPolygonUnion(mapData)
         this.mapData = mapData;
         console.log(this.mapData, "cccc");
         // 计算整个区域中心
         this.mapCenter = d3.geoCentroid(mapData)
         const shapesArr = this.drawGeoSVG(mapData);
         this.drawExtrudeGeometryMesh(shapesArr);
+        if(polygonUnion){
+            const shapesArr = this.drawGeoSVG(polygonUnion);
+            console.log(shapesArr, "********")
+            const polygonUnionMesh = this.drawPolygonUnion(shapesArr[0].shapes);
+            polygonUnionMesh.position.z = -this.baseExtrudeHeight;
+            this.unionAreaGroup.add(polygonUnionMesh);
+            console.log(polygonUnionMesh);
+        }
+        this.unionAreaGroup.add(this.areaGroup);
+        this.scene.add(this.unionAreaGroup);
+        this.addEvent(this.areaGroup.children)
 	}
     /**
      * @name: drawGeoSVG
@@ -57,7 +72,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
         
         const projection = d3.geoPath(mercator);
         const shapesArr = []
-        geojson.features.forEach(feature => {
+        const parsePath = (feature) => {
             const path = projection(feature); // svg路径字符串
             console.log(path, "svg path");
             if(path){
@@ -80,7 +95,12 @@ export default class CreateMapFromGeoJson extends BaseMap {
                     console.error(e.message, "svg路径转three的shape出错");
                 }
             }
-        })
+        }
+        if (geojson.type === "Feature") {
+            parsePath(geojson);
+        }else{
+            geojson.features.forEach(parsePath)
+        }
 
         return shapesArr;
     }
@@ -101,14 +121,12 @@ export default class CreateMapFromGeoJson extends BaseMap {
                 const pointsArr = shape.getPoints();
                 const areaLineMesh = this.getAreaLineMesh(pointsArr);
                 const areaLineMesh2 = areaLineMesh.clone()
-                areaLineMesh2.position.z = this.extrudeHeight;
+                areaLineMesh2.position.z = this.baseExtrudeHeight;
                 areaMesh.add(areaLineMesh);
                 areaMesh.add(areaLineMesh2);
                 this.areaGroup.add(areaMesh);
             })
         })
-        this.scene.add(this.areaGroup);
-        this.addEvent(this.areaGroup.children)
     }
 	
 	/**
@@ -140,19 +158,21 @@ export default class CreateMapFromGeoJson extends BaseMap {
             curveSegments: 24,
             steps: 10,
             bevelEnabled: false,
-            depth: this.extrudeHeight
+            depth: this.baseExtrudeHeight
         };
         const geometry = new THREE.ExtrudeBufferGeometry(shape, extrudeOpts);
+        console.log(geometry);
+        geometry.userData.shape = shape;
         const material = new THREE.MeshBasicMaterial({
-            color: "#3899ee",
+            color: this.initColor,
             depthTest: true
             // transparent: true,
             // opacity: 0.7,
         });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData = {
-            originColor: "#3899ee",
-            originHeight: this.extrudeHeight,
+            preColor: this.initColor,
+            preHeight: 0,
 			...mesh.userData,
             ...property,
         };
@@ -196,11 +216,15 @@ export default class CreateMapFromGeoJson extends BaseMap {
     initGUIPanel(mesh) {
         const [cX, cY, cZ] = mesh.userData.d3Centroid;
         const [oX, oY, oZ] = mesh.originPosition.toArray();
-        const color = mesh.userData.originColor;
-        const height = mesh.userData.originHeight;
+        const color = mesh.userData.preColor;
+        const extrudeHeight = this.extrudeHeight;
+        const preHeight = mesh.userData.preHeight;
+        const baseColor = this.initColor;
         const setting = {
-            color: color,
-            areaHeight: height,
+            baseColor, 
+            preColor: color,
+            baseAreaHeight: extrudeHeight,
+            preHeight: preHeight,
             offsetX: cX,
             offsetY: cY,
             offsetZ: cZ,
@@ -243,14 +267,40 @@ export default class CreateMapFromGeoJson extends BaseMap {
 
         this.GUIPanel.add(setting, "addAttributes");
         const folder1 = this.GUIPanel.addFolder("区块样式");
-        folder1.addColor(setting, "color").listen().onChange(color => {
-            mesh.material.color = new THREE.Color(color);
-            mesh.userData.originColor = color;
+        folder1.addColor(setting, "baseColor").listen().onChange(color => {
+           
+            this.areaGroup.children.forEach((obj) => {
+                if (obj === mesh) {
+                    mesh.material.color = new THREE.Color(color);
+                    mesh.userData.preColor = color;
+                }else{
+                    obj.material.color = new THREE.Color(color);
+                    obj.userData.preColor = color;
+                }
+            })
+        }).onFinishChange(baseColor => {
+            this.initColor = baseColor;
         });
-        folder1.add(setting, "areaHeight", 1, 5, 0.01).listen().onChange(areaHeight => {
-            mesh.scale.set(1, 1, areaHeight); // 拉伸Z轴实现立体效果
-            mesh.position.z = (areaHeight - this.extrudeHeight);
-            mesh.userData.originHeight = areaHeight;
+        folder1.addColor(setting, "preColor").listen().onChange(color => {
+            mesh.material.color = new THREE.Color(color);
+            mesh.userData.preColor = color;
+        });
+        folder1.add(setting, "baseAreaHeight", 0.1, 5, 0.01).listen().onChange(baseAreaHeight => {
+            this.areaGroup.children.forEach((obj) => {
+                if (obj === mesh) {
+                    mesh.scale.set(1, 1, (baseAreaHeight + mesh.userData.preHeight) / this.baseExtrudeHeight); // 拉伸Z轴实现立体效果
+                    mesh.position.z = baseAreaHeight + mesh.userData.preHeight - this.baseExtrudeHeight;
+                }else{
+                    obj.scale.set(1, 1, (baseAreaHeight + obj.userData.preHeight) / this.baseExtrudeHeight); // 拉伸Z轴实现立体效果
+                    obj.position.z = baseAreaHeight + obj.userData.preHeight - this.baseExtrudeHeight;                }
+            })
+        }).onFinishChange((baseAreaHeight) => {
+            this.extrudeHeight = baseAreaHeight;
+        });
+        folder1.add(setting, "preHeight", 0, 5, 0.01).listen().onChange(preHeight => {
+            mesh.scale.set(1, 1, (preHeight + this.extrudeHeight) / this.baseExtrudeHeight); // 拉伸Z轴实现立体效果
+            mesh.position.z = preHeight + this.extrudeHeight - this.baseExtrudeHeight;
+            mesh.userData.preHeight = preHeight;
         });
 
         const folder2 = this.GUIPanel.addFolder("区块中点偏移");
@@ -291,13 +341,34 @@ export default class CreateMapFromGeoJson extends BaseMap {
         this.isEdit = true
         this.initGUIPanel(editMesh)
     }
-    
+    // 绘制并集多边形（总轮廓）
+    drawPolygonUnion(shapes) {
+        console.log(shapes, "()))))))))))))))))))))))))")
+        const extrudeSettings = {
+            depth: 0.1,
+            bevelEnabled: false,
+        };
+        const shapeBufferGeometry = new THREE.ExtrudeBufferGeometry(shapes[0], extrudeSettings);
+        const material = new THREE.MeshBasicMaterial({
+            color: "#fff",
+            transparent: true,
+            opacity: 0
+        });
+        let mesh = new THREE.Mesh(shapeBufferGeometry, material);
+        mesh.rotateX(Math.PI);
+        return mesh;
+    }
     // 多个多边形的并集
     computedPolygonUnion(geojson) {
-        if (geojson instanceof Array) {
-            return union(...geojson);
+        try {
+            if (geojson instanceof Array) {
+                return union(...geojson);
+            }
+            return union(...geojson.features);
+            
+        } catch (error) {
+            return null;
         }
-        return union(...geojson.features);
     }
     // 导出并集geojson
 	exportPolygonUnion() {
@@ -307,7 +378,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
 	}
 	// 释放场景中所有的内存并移除
 	removeAllMesh() {
-		this.areaGroup.traverse(obj => {
+		this.unionAreaGroup.traverse(obj => {
 			if(obj.geometry){
 				obj.geometry.dispose();
 			}
@@ -315,7 +386,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
 				obj.material.dispose();
 			}
 		})
-		this.scene.remove(this.areaGroup);
+		this.scene.remove(this.unionAreaGroup);
 	}
 	// 销毁释放内存
 	destory() {

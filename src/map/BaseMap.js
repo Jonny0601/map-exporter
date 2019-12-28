@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:54:24
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2019-12-26 12:17:23
+ * @LastEditTime : 2019-12-28 15:51:40
  */
 import * as THREE from "three";
 import Stats from "three/examples/jsm/libs/stats.module.js";
@@ -87,14 +87,14 @@ export default class BaseMap {
             if (intersects.length > 0) {
                 if (this.INTERSECTED !== intersects[0].object) {
                     if (this.INTERSECTED) {
-                        this.INTERSECTED.material.color.set(this.INTERSECTED.userData.originColor);
+                        this.INTERSECTED.material.color.set(this.INTERSECTED.userData.preColor);
                     }
                     this.INTERSECTED = intersects[0].object;
                     this.INTERSECTED.material.color.setHex( 0xff0000 );
                 }
             } else {
                 if (this.INTERSECTED) {
-                    this.INTERSECTED.material.color.set(this.INTERSECTED.userData.originColor);
+                    this.INTERSECTED.material.color.set(this.INTERSECTED.userData.preColor);
                 }
                 this.INTERSECTED = null;
             }
