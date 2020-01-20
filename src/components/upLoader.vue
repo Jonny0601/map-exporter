@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 10:25:59
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2019-12-18 10:30:32
+ * @LastEditTime : 2019-12-31 09:58:59
  -->
 <template>
 	<div class="container">
@@ -74,7 +74,6 @@ export default {
 				reader.readAsText(fileRaw, "UTF-8"); // 读取文件 
 				reader.onload = (evt) => { //读取完文件之后会回来这里
 					const fileString = evt.target.result; // 读取文件内容
-					console.log(fileString);
 					try{
 						resolve(JSON.parse(fileString));
 					}catch(e){

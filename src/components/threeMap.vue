@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:14:41
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2019-12-18 13:16:51
+ * @LastEditTime : 2020-01-10 18:07:00
  -->
 <template>
 	<div class="mapContainer" ref="mapContainer">
@@ -24,7 +24,7 @@
 				type="textarea"
 				v-model="propertyValue"
 				:rows="4"
-				placeholder="请输入属性的key和value，例：id=suzhou，多个属性请用“;”号隔开"
+				placeholder="请输入属性的key和value，例：id='suzhou'，多个属性请用“;”号隔开"
 				:autosize="true"
 				:clearable="true"
 				:autofocus="true"
@@ -63,7 +63,7 @@ export default {
 				renderHeight: window.innerHeight,
 				isStatsWatch: true,
 				root: this.$refs.mapContainer,
-				addAttributes: mesh => {
+				addAttributesHandle: mesh => {
 					if(this.centerDialogVisible){
 						return
 					}
@@ -88,6 +88,7 @@ export default {
 				}
 			}
 			this.centerDialogVisible = false;
+			this.threeMapInstance.updateAreaText(this.currentEditAreaMesh);
 			this.clearInput();
 		},
 		// 解析属性字符串
@@ -135,12 +136,14 @@ export default {
 	width: 100%;
 	position: relative;
 	.propertyBox{
-		display: flex;
+		// display: flex;
 		margin-bottom: 20px;
+		overflow: hidden;
 		>p {
 			margin: 0;
 			margin-right: 1%;
 			font-weight: bold;
+			float: left;
 		}
 	}
 }

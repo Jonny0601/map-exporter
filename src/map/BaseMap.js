@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:54:24
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2019-12-28 15:51:40
+ * @LastEditTime : 2020-01-17 11:38:08
  */
 import * as THREE from "three";
 import Stats from "three/examples/jsm/libs/stats.module.js";
@@ -22,6 +22,7 @@ export default class BaseMap {
 		this.sceneUpdateArr = [];
 		this.mousePosition = null // 二维坐标 THREE.Vector2类型
 		this.raycaster = new THREE.Raycaster(); // 光线投射实例
+		this.raycaster2 = new THREE.Raycaster(); // 光线投射实例
 		this.INTERSECTED = null; // 当前鼠标经过光线投射拾取到的区域mesh
 		this.link = this.createLink();
 		this.gltfLoader = new GLTFLoader();
@@ -78,39 +79,63 @@ export default class BaseMap {
 	}
     // 添加事件
     addEvent(eventAreaObjects) {
-        this.raycaster.update = () => {
-            if (this.mousePosition) {
-                this.raycaster.setFromCamera(this.mousePosition, this.camera);
-            }
-            // 计算物体和射线的焦点
-            const intersects = this.raycaster.intersectObjects(eventAreaObjects);
-            if (intersects.length > 0) {
-                if (this.INTERSECTED !== intersects[0].object) {
-                    if (this.INTERSECTED) {
-                        this.INTERSECTED.material.color.set(this.INTERSECTED.userData.preColor);
-                    }
-                    this.INTERSECTED = intersects[0].object;
-                    this.INTERSECTED.material.color.setHex( 0xff0000 );
-                }
-            } else {
-                if (this.INTERSECTED) {
-                    this.INTERSECTED.material.color.set(this.INTERSECTED.userData.preColor);
-                }
-                this.INTERSECTED = null;
-            }
-        };
-        this.sceneUpdateArr.push(this.raycaster);
-		this.labelRenderer.domElement.addEventListener( "mousemove", this.mouseMoveHandle.bind(this), false);
+		this.raycaster._customId = "raycaster1"
+		this.raycaster.update = () => {
+			if (this.mousePosition) {
+				this.raycaster.setFromCamera(this.mousePosition, this.camera);
+			}
+			// 计算物体和射线的焦点
+			const intersects = this.raycaster.intersectObjects(eventAreaObjects);
+			if (intersects.length > 0) {
+				if (this.INTERSECTED !== intersects[0].object) {
+					if (this.INTERSECTED) {
+						this.INTERSECTED.material.color.set(this.INTERSECTED.userData.preColor);
+					}
+					this.INTERSECTED = intersects[0].object;
+					this.INTERSECTED.material.color.setHex( 0xff0000 );
+				}
+			} else {
+				if (this.INTERSECTED) {
+					this.INTERSECTED.material.color.set(this.INTERSECTED.userData.preColor);
+				}
+				this.INTERSECTED = null;
+			}
+		};
+		const raycaster = this.sceneUpdateArr.find(obj => (obj._customId && obj._customId === "raycaster1"));
+		if (!raycaster) {
+			this.sceneUpdateArr.push(this.raycaster);
+			this.labelRenderer.domElement.addEventListener( "mousemove", this.mouseMoveHandle, false);
+		}
     }
-
+	// 实时获取相和网格模型的距离
+	getDistanceFromCamera(eventAreaObjects, cb) {
+		const vec2 = new THREE.Vector2(0, 0);
+		this.raycaster2._customId = "raycaster2";
+		this.raycaster2.update = () => {
+			// console.log(this.sceneUpdateArr);
+			this.raycaster.setFromCamera(vec2, this.camera);
+			// 计算物体和射线的焦点
+			const intersects = this.raycaster.intersectObjects(eventAreaObjects);
+			if (intersects[0]) {
+				this.camera.far = intersects[0].distance + 100;
+				this.camera.updateProjectionMatrix();
+				console.log(this.camera.far);
+				cb && cb(intersects[0].distance);
+			}
+		};
+		const raycaster2 = this.sceneUpdateArr.find(obj => (obj._customId && obj._customId === "raycaster2"));
+		if (!raycaster2) {
+			this.sceneUpdateArr.push(this.raycaster2);
+		}
+	}
     // 鼠标移动事件
-    mouseMoveHandle(event) {
+    mouseMoveHandle = (event) => {
         // 将鼠标位置归一化为设备坐标。x 和 y 方向的取值范围是 (-1 to +1)
         this.mousePosition = new THREE.Vector2();
         const mainCanvas = this.renderer.domElement;
         const {left, top} = mainCanvas.getBoundingClientRect();
         this.mousePosition.x = ((event.clientX - left) / mainCanvas.offsetWidth) * 2 - 1;
-        this.mousePosition.y = -((event.clientY - top) / mainCanvas.offsetHeight) * 2 + 1;
+		this.mousePosition.y = -((event.clientY - top) / mainCanvas.offsetHeight) * 2 + 1;
     }
 	createLink (){
 		const a = document.createElement("a"); // 用于导出gltf的a标签

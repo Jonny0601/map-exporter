@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:32:57
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2019-12-28 16:36:29
+ * @LastEditTime : 2020-01-10 18:21:39
  -->
 <template>
 	<div class="main">
@@ -84,7 +84,7 @@ export default {
 				console.log(threeMapInstance.scene);
 				console.log(threeMapInstance.camera);
 				// 整正区域中心点经过旋转后的位置
-				threeMapInstance.exportGLTF([threeMapInstance.unionAreaGroup, threeMapInstance.camera]);
+				threeMapInstance.exportGLTF([threeMapInstance.areaGroup, threeMapInstance.camera]);
 			}
 		},
 		// 导出区域并集geojson

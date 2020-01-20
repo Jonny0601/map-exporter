@@ -4,56 +4,239 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 14:27:13
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2019-12-28 17:36:09
+ * @LastEditTime : 2020-01-17 13:58:20
  */
 import BaseMap from "./BaseMap"
 import * as d3 from "d3-geo";
-import { union } from "@turf/turf";
+import { union, centroid } from "@turf/turf";
 import * as THREE from "three";
-import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer";
 import d3threeD from "./d3ThreeD";
 import { GUI } from "three/examples/jsm/libs/dat.gui.module";
+import { Line2 } from "three/examples/jsm/lines/Line2";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
+import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 export default class CreateMapFromGeoJson extends BaseMap {
 	constructor(set){
         super(set);
         this.initMapProperty();
         this.d3threeD = {};
         d3threeD(this.d3threeD);
+        if (!this.GUIPanel) {
+            this.GUIPanel = new GUI({
+                width: 250,
+                autoPlace: false
+            });
+            this.GUIPanel.domElement.style.position = "absolute";
+            this.GUIPanel.domElement.style.right = "0";
+            this.GUIPanel.domElement.style.top = "0";
+            this.GUIPanel.domElement.style.zIndex = "1001";
+            this.set.root.appendChild(this.GUIPanel.domElement);
+        }
 	}
 	// 初始化属性
 	initMapProperty() {
 		this.vector3Json = []; // 经过解析转换后的geojson数据
 		this.extrudeHeight = 0.5; // 多边形的挤压高度
 		this.baseExtrudeHeight = 0.5; // 初始多边形的挤压高度
-		this.initColor = "#3899ee"; // 初始多边形颜色
+        this.baseColor = "#328496"; // 初始多边形颜色
+        this.baseLineColor = "#00b4cd";
+        this.baseLineWidth = 3;
 		this.areaGroup = new THREE.Group(); // 多边形区域组
-		this.unionAreaGroup = new THREE.Group(); // 多边形区域组
+        this.areaLineGroup = new THREE.Group(); // 多边形区域组
+        this.areaLabelGroup = new THREE.Group(); // 文字标记组
+        this.areaGroup.userData.baseExtrudeHeight = this.baseExtrudeHeight;
+        this.areaGroup.userData.baseLineColor = this.baseLineColor;
+        this.areaGroup.userData.baseLineWidth = this.baseLineWidth;
+        this.areaGroup.userData.baseColor = this.baseColor;
 		this.mapData = null; // geojson源数据
         this.mapCenter = null; // geojson表示的形状的中心位置
         this.isEdit = false; // 是否处于编辑状态
-        this.GUIPanel = null; // 编辑的ui界面
+    }
+    // 删除gui
+    destoryGUI() {
+        if (this.GUIPanel) {
+            this.GUIPanel.destroy();
+            console.log(this.GUIPanel);
+            this.GUIPanel.maskDiv && (this.GUIPanel.maskDiv.style.display = "none");
+        }
+    }
+    initBaseGUI(currentMesh) {
+        this.destoryGUI();
+        if (!this.isEdit) {
+            const settings = {
+                baseExtrudeHeight: this.areaGroup.userData.baseExtrudeHeight,
+                baseLineWidth: this.baseLineWidth,
+                baseColor: this.baseColor,
+                baseLineColor: this.baseLineColor
+            }
+            const commonFolder = this.GUIPanel.addFolder("统一配置")
+            commonFolder.open();
+            commonFolder.add(settings, "baseExtrudeHeight", 0.1, 100, 0.1).name("区块高度").onChange(baseExtrudeHeight => {
+                baseExtrudeHeight = Number(baseExtrudeHeight);
+                this.areaGroup.children.forEach((obj) => {
+                    obj.scale.set(1, 1, baseExtrudeHeight / this.baseExtrudeHeight); // 拉伸Z轴实现立体效果
+                    obj.userData.markCenter[2] = baseExtrudeHeight
+                    obj.userData.staticCenter[2] = baseExtrudeHeight
+                })
+                this.areaLineGroup.children.forEach(obj => {
+                    if (obj.type === "Line2") {
+                        obj.position.z = baseExtrudeHeight - this.baseExtrudeHeight
+                    }
+                })
+                this.areaLabelGroup.children.forEach(obj => {
+                    obj.position.z = baseExtrudeHeight;
+                })
+            }).onFinishChange(baseExtrudeHeight => {
+                this.areaGroup.userData.baseExtrudeHeight = Number(baseExtrudeHeight);
+                console.log(this.areaGroup)
+            })
+            commonFolder.addColor(settings, "baseColor").name("区块颜色").onChange(baseColor => {
+                this.areaGroup.children.forEach((obj) => {
+                    obj.material.color = new THREE.Color(baseColor);
+                    obj.userData.preColor = baseColor;
+                })
+            }).onFinishChange(baseColor => {
+                this.areaGroup.userData.baseColor = baseColor;
+            })
+    
+            commonFolder.add(settings, "baseLineWidth", 1, 100, 1).name("边线宽度").onChange(baseLineWidth => {
+                this.areaLineGroup.children.forEach((obj) => {
+                    if (obj.type === "Line2") {
+                        obj.material.linewidth = Number(baseLineWidth);
+                    }
+                })
+            }).onFinishChange(baseLineWidth => {
+                this.areaGroup.userData.baseLineWidth = Number(baseLineWidth);
+            })
+            commonFolder.addColor(settings, "baseLineColor").name("边线颜色").onChange(baseLineColor => {
+                this.areaLineGroup.children.forEach((obj) => {
+                    if (obj.type === "Line2") {
+                        obj.material.color = new THREE.Color(baseLineColor);
+                    }
+                })
+            }).onFinishChange(baseLineColor => {
+                this.areaGroup.userData.baseLineColor = baseLineColor;
+            })
+        }else if (currentMesh) {
+            // 创建遮罩层
+            if (!this.GUIPanel.maskDiv) {
+                const maskDiv = document.createElement("div");
+                maskDiv.style.position = "absolute";
+                maskDiv.style.left = "0";
+                maskDiv.style.bottom = "0";
+                maskDiv.style.right = "0";
+                maskDiv.style.top = "0";
+                maskDiv.style.zIndex = "1000";
+                maskDiv.style.background = "rgba(0, 0 , 0, 0.3)";
+                this.GUIPanel.maskDiv = maskDiv
+                // 添加一个适当的事件监听器
+                this.GUIPanel.maskDiv.addEventListener("click", () => {
+                    // 退出编辑
+                    this.isEdit = false;
+                    if (this.GUIPanel) {
+                        // console.log(this.GUIPanel.maskDiv);
+                        // this.set.root.removeChild(this.GUIPanel.maskDiv);
+                        // // delete this.GUIPanel.maskDiv;
+                        this.GUIPanel.maskDiv.style.display = "none";
+                        this.initBaseGUI()
+                    }
+                }, false);
+            }
+            this.GUIPanel.maskDiv.style.display = "block";
+            this.set.root.appendChild(this.GUIPanel.maskDiv);
+            const [cX, cY, cZ] = currentMesh.userData.markCenter;
+            const preColor = currentMesh.userData.preColor;
+            const settings = {
+                color: preColor,
+                offsetX: cX,
+                offsetY: cY,
+                offsetZ: cZ,
+                addAttributesHandle: () => {
+                    this.set.addAttributesHandle && this.set.addAttributesHandle(currentMesh);
+                }
+            }
+            const preFolder = this.GUIPanel.addFolder("单个配置");
+            preFolder.open();
+            preFolder.addColor(settings, "color").name("颜色").onChange(color => {
+                currentMesh.material.color = new THREE.Color(color)
+                currentMesh.userData.preColor = color;
+            })
+            preFolder.add(settings, "offsetX", cX - 10, cX + 10, 0.01).name("x轴偏移").onChange(offsetX => {
+                this.areaLabelGroup.children.forEach(obj => {
+                    if (currentMesh.userData.tid === obj.userData.tid) {
+                        obj.position.x = offsetX;
+                        currentMesh.userData.markCenter[0] = offsetX;
+                    }
+                })
+            })
+            preFolder.add(settings, "offsetY", cY - 10, cY + 10, 0.01).name("y轴偏移").onChange(offsetY => {
+                this.areaLabelGroup.children.forEach(obj => {
+                    if (currentMesh.userData.tid === obj.userData.tid) {
+                        obj.position.y = offsetY;
+                        currentMesh.userData.markCenter[1] = offsetY;
+                    }
+                })
+            })
+            preFolder.add(settings, "offsetZ", cZ - 10, cZ + 10, 0.01).name("z轴偏移").onChange(offsetZ => {
+                this.areaLabelGroup.children.forEach(obj => {
+                    if (currentMesh.userData.tid === obj.userData.tid) {
+                        obj.position.z = offsetZ;
+                        currentMesh.userData.markCenter[2] = offsetZ;
+                        currentMesh.userData.staticCenter[2] = offsetZ;
+                    }
+                })
+            })
+            preFolder.add(settings, "addAttributesHandle").name("编辑属性");
+        }
+
+
+        
+
+    }
+    // 由于d3-geo转换后的y轴是相对于屏幕是反的，因此需要对转换后的点做一下y轴取反处理
+    transformYAxis(pointsArr) {
+        return pointsArr.map(p => {
+            return new THREE.Vector2(p.x, -p.y);
+        })
+    }
+
+    updateAreaText(currentMesh) {
+        this.areaLabelGroup.children.forEach(obj => {
+            if (currentMesh.userData.tid === obj.userData.tid) {
+                obj.element.innerHTML = currentMesh.userData.name;
+                console.log(obj);
+            }
+        })
     }
     
     // 绘制区域地图
     drawAreaMap(mapData) {
         const polygonUnion = this.computedPolygonUnion(mapData)
-        this.mapData = mapData;
-        console.log(this.mapData, "cccc");
         // 计算整个区域中心
-        this.mapCenter = d3.geoCentroid(mapData)
+        try{
+            this.mapCenter = centroid(polygonUnion).geometry.coordinates;
+        }catch(e){
+            this.mapCenter = d3.geoCentroid(mapData)
+        }
+        this.mapData = mapData;
+        console.log(this.mapData, "geojson");
+        console.log(this.mapCenter, "polygonUnion center");
         const shapesArr = this.drawGeoSVG(mapData);
         this.drawExtrudeGeometryMesh(shapesArr);
         if(polygonUnion){
             const shapesArr = this.drawGeoSVG(polygonUnion);
-            console.log(shapesArr, "********")
-            const polygonUnionMesh = this.drawPolygonUnion(shapesArr[0].shapes);
-            polygonUnionMesh.position.z = -this.baseExtrudeHeight;
-            this.unionAreaGroup.add(polygonUnionMesh);
-            console.log(polygonUnionMesh);
+            const {mesh, shape} = this.drawPolygonUnion(shapesArr[0].shapes);
+            this.areaGroup.userData.polygonUnionShape = shape;
+            this.scene.add(mesh);
         }
-        this.unionAreaGroup.add(this.areaGroup);
-        this.scene.add(this.unionAreaGroup);
-        this.addEvent(this.areaGroup.children)
+        this.scene.add(this.areaGroup);
+        this.scene.add(this.areaLineGroup);
+        this.scene.add(this.areaLabelGroup);
+        this.addEvent(this.areaGroup.children);
+        this.getDistanceFromCamera(this.areaGroup.children, (far) => {
+            this.areaGroup.userData.cameraFar = far;
+        });
+        this.initBaseGUI();
 	}
     /**
      * @name: drawGeoSVG
@@ -67,27 +250,26 @@ export default class CreateMapFromGeoJson extends BaseMap {
     drawGeoSVG(geojson) {
         const mercator = d3.geoMercator()
             .center(this.mapCenter)
+            .scale(1500)
             .translate([0, 0])
             // .fitSize([200, 200], geojson)
-        
-        const projection = d3.geoPath(mercator);
+        const path = d3.geoPath(mercator);
         const shapesArr = []
-        const parsePath = (feature) => {
-            const path = projection(feature); // svg路径字符串
-            console.log(path, "svg path");
-            if(path){
+        const parsePath = (feature, i) => {
+            const pathStr = path(feature); // svg路径字符串
+            if(pathStr){
                 /** 
                  * 这里必要检测 path 是否为null，因为之前使用了自定义缩放，
                  * 在给定的 fitExtent 距离外的 feature 会生成 null
                 */
                 try {
-                    const shapePath = this.d3threeD.transformSVGPath(path);
+                    const shapePath = this.d3threeD.transformSVGPath(pathStr);
                     const shapes = shapePath.toShapes(true, false);
-                    console.log(shapes);
                     shapesArr.push({
                         shapeDescData: {
                             ...feature.properties,
-                            d3Centroid: [...projection.centroid(feature), 0]
+                            // d3Centroid: [...path.centroid(feature), 0]
+                            tid: `tid${i + 1}`,
                         },
                         shapes
                     })
@@ -118,13 +300,11 @@ export default class CreateMapFromGeoJson extends BaseMap {
                 // 绘制带挤压高度的区域mesh
                 const areaMesh = this.getAeraMesh(shape, item.shapeDescData);
                 // 获取形状所有的点画出轮廓线
-                const pointsArr = shape.getPoints();
-                const areaLineMesh = this.getAreaLineMesh(pointsArr);
-                const areaLineMesh2 = areaLineMesh.clone()
-                areaLineMesh2.position.z = this.baseExtrudeHeight;
-                areaMesh.add(areaLineMesh);
-                areaMesh.add(areaLineMesh2);
+                const pointsArr = shape.getPoints();  // Vec2[]
+                const areaLineMesh = this.getAreaLineMesh(this.transformYAxis(pointsArr));
+                this.areaLineGroup.add(areaLineMesh);
                 this.areaGroup.add(areaMesh);
+                console.log(areaMesh);
             })
         })
     }
@@ -160,178 +340,75 @@ export default class CreateMapFromGeoJson extends BaseMap {
             bevelEnabled: false,
             depth: this.baseExtrudeHeight
         };
-        const geometry = new THREE.ExtrudeBufferGeometry(shape, extrudeOpts);
-        console.log(geometry);
-        geometry.userData.shape = shape;
+        const newShape = new THREE.Shape().setFromPoints(this.transformYAxis(shape.getPoints()))
+        const geometry = new THREE.ExtrudeBufferGeometry(newShape, extrudeOpts);
+        geometry.userData.shape = newShape;
         const material = new THREE.MeshBasicMaterial({
-            color: this.initColor,
+            color: this.baseColor,
             depthTest: true
             // transparent: true,
             // opacity: 0.7,
         });
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+        const center = geometry.boundingSphere.center;
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData = {
-            preColor: this.initColor,
-            preHeight: 0,
-			...mesh.userData,
+            preColor: this.baseColor,
+            markCenter: [center.x, center.y, this.baseExtrudeHeight],
+            staticCenter: [center.x, center.y, this.baseExtrudeHeight],
             ...property,
         };
-        mesh.rotateX(Math.PI); // 绕x轴翻转 180度；
-        // 修改中心点 旋转后的位置
-        const [x, y , z] = mesh.userData.d3Centroid;
-        const cp = new THREE.Vector3(x, y, z);
-        setTimeout(() => {
-            const tCp = cp.applyMatrix4(mesh.matrixWorld);
-            mesh.userData.d3Centroid = tCp.toArray();
-            mesh.originPosition = tCp;
-            console.log(mesh.userData.d3Centroid);
-             // 添加区域label
-            const areaLabel = this.drawText(  
-                property.d3Centroid,
-                mesh.userData.name || mesh.userData.id || ``
-            );
-            mesh.add(areaLabel);
-        }, 0)
-        mesh.receiveShadow = true;
-        mesh.castShadow = true;
-        console.log(mesh);
+        const areaLabel = this.drawText(  
+            [center.x, center.y, this.baseExtrudeHeight],
+            mesh.userData.name || mesh.userData.id || `mark`
+        );
+        areaLabel.userData = {
+            ...property
+        }
+        this.areaLabelGroup.add(areaLabel);
+        // const helper = new THREE.Box3Helper(mesh.geometry.boundingBox, 0xffff00);
+        // console.log(helper)
+        // this.scene.add( helper );
         return mesh;
     }
 
-    // 绘制轮廓线条 points: any[]
-    getAreaLineMesh(points) {
-        console.log(points)
+    // 创建圆柱柱图
+    createCylinderBar(position) {
+        const geometry = new THREE.CylinderBufferGeometry(0.5, 0.5, 5, 60);
         const material = new THREE.MeshBasicMaterial({
-            color: "#fff",
-            transparent: true,
-            opacity: 0.8,
+            color: "blue",
         });
-        const geometry = new THREE.BufferGeometry().setFromPoints(points.map(point => {
-            return new THREE.Vector3(point.x, point.y, 0);
-        }));
-        const line = new THREE.Line(geometry, material);
-        return line;
+        const cylinder = new THREE.Mesh( geometry, material );
+        const [x, y, z] = position;
+        cylinder.position.set(x, y, -(5 / 2));
+        cylinder.rotateX(Math.PI / 2);
+        return cylinder;
     }
-    // 开启编辑，创建GUI
-    initGUIPanel(mesh) {
-        const [cX, cY, cZ] = mesh.userData.d3Centroid;
-        const [oX, oY, oZ] = mesh.originPosition.toArray();
-        const color = mesh.userData.preColor;
-        const extrudeHeight = this.extrudeHeight;
-        const preHeight = mesh.userData.preHeight;
-        const baseColor = this.initColor;
-        const setting = {
-            baseColor, 
-            preColor: color,
-            baseAreaHeight: extrudeHeight,
-            preHeight: preHeight,
-            offsetX: cX,
-            offsetY: cY,
-            offsetZ: cZ,
-            addAttributes: () => {
-                this.set.addAttributes && this.set.addAttributes(mesh);
-            }
-        }
-        // 创建编辑的UI界面
-        this.GUIPanel = new GUI({
-            width: 250,
-            autoPlace: false
-        });
-        this.GUIPanel.domElement.style.position = "absolute";
-        this.GUIPanel.domElement.style.right = "0";
-        this.GUIPanel.domElement.style.top = "0";
-        this.GUIPanel.domElement.style.zIndex = "1001";
-        // 创建遮罩层
-        const maskDiv = document.createElement("div");
-        maskDiv.style.position = "absolute";
-        maskDiv.style.left = "0";
-        maskDiv.style.bottom = "0";
-        maskDiv.style.right = "0";
-        maskDiv.style.top = "0";
-        maskDiv.style.zIndex = "1000";
-        maskDiv.style.background = "rgba(0, 0 , 0, 0.5)";
-        this.GUIPanel.maskDiv = maskDiv
-        maskDiv.addEventListener("click", () => {
-            // 退出编辑
-            this.isEdit = false;
-            if (this.GUIPanel) {
-                this.set.root.removeChild(this.GUIPanel.domElement);
-                this.set.root.removeChild(this.GUIPanel.maskDiv);
-                this.GUIPanel = null;
-            }
 
-        }, false);
-
-        this.set.root.appendChild(this.GUIPanel.domElement);
-        this.set.root.appendChild(this.GUIPanel.maskDiv);
-
-        this.GUIPanel.add(setting, "addAttributes");
-        const folder1 = this.GUIPanel.addFolder("区块样式");
-        folder1.addColor(setting, "baseColor").listen().onChange(color => {
-           
-            this.areaGroup.children.forEach((obj) => {
-                if (obj === mesh) {
-                    mesh.material.color = new THREE.Color(color);
-                    mesh.userData.preColor = color;
-                }else{
-                    obj.material.color = new THREE.Color(color);
-                    obj.userData.preColor = color;
-                }
-            })
-        }).onFinishChange(baseColor => {
-            this.initColor = baseColor;
-        });
-        folder1.addColor(setting, "preColor").listen().onChange(color => {
-            mesh.material.color = new THREE.Color(color);
-            mesh.userData.preColor = color;
-        });
-        folder1.add(setting, "baseAreaHeight", 0.1, 5, 0.01).listen().onChange(baseAreaHeight => {
-            this.areaGroup.children.forEach((obj) => {
-                if (obj === mesh) {
-                    mesh.scale.set(1, 1, (baseAreaHeight + mesh.userData.preHeight) / this.baseExtrudeHeight); // 拉伸Z轴实现立体效果
-                    mesh.position.z = baseAreaHeight + mesh.userData.preHeight - this.baseExtrudeHeight;
-                }else{
-                    obj.scale.set(1, 1, (baseAreaHeight + obj.userData.preHeight) / this.baseExtrudeHeight); // 拉伸Z轴实现立体效果
-                    obj.position.z = baseAreaHeight + obj.userData.preHeight - this.baseExtrudeHeight;                }
-            })
-        }).onFinishChange((baseAreaHeight) => {
-            this.extrudeHeight = baseAreaHeight;
-        });
-        folder1.add(setting, "preHeight", 0, 5, 0.01).listen().onChange(preHeight => {
-            mesh.scale.set(1, 1, (preHeight + this.extrudeHeight) / this.baseExtrudeHeight); // 拉伸Z轴实现立体效果
-            mesh.position.z = preHeight + this.extrudeHeight - this.baseExtrudeHeight;
-            mesh.userData.preHeight = preHeight;
-        });
-
-        const folder2 = this.GUIPanel.addFolder("区块中点偏移");
-        folder2.add(setting, "offsetX", Math.floor(oX -5), Math.floor(oX + 5), 0.001).listen().onChange(offsetX => {
-            mesh.children.forEach(child => {
-                if(child instanceof CSS2DObject){
-                    child.position.x = offsetX;
-                    mesh.userData.d3Centroid[0] = offsetX;
-                }
-            })
+    // 绘制轮廓线条 points: vec2[]
+    getAreaLineMesh(points) {
+        const color = new THREE.Color();
+        const positions = [];
+        const colors = [];
+        points.forEach((p, i) => {
+            positions.push(p.x, p.y, this.baseExtrudeHeight);
+            color.setHSL(i / points.length, 1.0, 0.5);
+            colors.push(color.r, color.g, color.b);
         })
-        folder2.add(setting, "offsetY",  Math.floor(oY -5), Math.floor(oY + 5), 0.001).listen().onChange(offsetY => {
-            mesh.children.forEach(child => {
-                if(child instanceof CSS2DObject){
-                    child.position.y = -offsetY;
-                    mesh.userData.d3Centroid[1] = offsetY;
-                }
-            })
-            
+        const geometry = new LineGeometry();
+        geometry.setPositions(positions);
+        geometry.setColors(colors);
+        const matLine = new LineMaterial({
+            color: this.baseLineColor,
+            linewidth: this.baseLineWidth, // in pixels
+            // vertexColors: THREE.VertexColors,
+            //resolution:  // to be set by renderer, eventually
+            dashed: false
         });
-        folder2.add(setting, "offsetZ",  Math.floor(oZ -5), Math.floor(oZ + 5), 0.001).listen().onChange(offsetZ => {
-            mesh.children.forEach(child => {
-                if(child instanceof CSS2DObject){
-                    child.position.z = -offsetZ;
-                    mesh.userData.d3Centroid[2] = offsetZ;
-                }
-            })
-        });
-        
-        folder1.open()
-        folder2.open()
+        matLine.resolution.set(this.set.renderWidth, this.set.renderHeight);
+        const line = new Line2( geometry, matLine);
+        return line;
     }
     // 开启编辑模式
     editEvent(editMesh) {
@@ -339,24 +416,21 @@ export default class CreateMapFromGeoJson extends BaseMap {
             return;
         }
         this.isEdit = true
-        this.initGUIPanel(editMesh)
+        this.initBaseGUI(editMesh)
     }
     // 绘制并集多边形（总轮廓）
     drawPolygonUnion(shapes) {
-        console.log(shapes, "()))))))))))))))))))))))))")
-        const extrudeSettings = {
-            depth: 0.1,
-            bevelEnabled: false,
-        };
-        const shapeBufferGeometry = new THREE.ExtrudeBufferGeometry(shapes[0], extrudeSettings);
+        const pointsArr = this.transformYAxis(shapes[0].getPoints())
+        const shape = new THREE.Shape().setFromPoints(pointsArr);
+        const ShapeGeometry = new THREE.ShapeGeometry(shape);
         const material = new THREE.MeshBasicMaterial({
             color: "#fff",
             transparent: true,
-            opacity: 0
+            opacity: 0,
+            side: THREE.DoubleSide,
         });
-        let mesh = new THREE.Mesh(shapeBufferGeometry, material);
-        mesh.rotateX(Math.PI);
-        return mesh;
+        let mesh = new THREE.Mesh(ShapeGeometry, material);
+        return {mesh, shape};
     }
     // 多个多边形的并集
     computedPolygonUnion(geojson) {
@@ -378,15 +452,25 @@ export default class CreateMapFromGeoJson extends BaseMap {
 	}
 	// 释放场景中所有的内存并移除
 	removeAllMesh() {
-		this.unionAreaGroup.traverse(obj => {
+		this.areaGroup.traverse(obj => {
 			if(obj.geometry){
 				obj.geometry.dispose();
 			}
 			if (obj.material) {
 				obj.material.dispose();
 			}
-		})
-		this.scene.remove(this.unionAreaGroup);
+        })
+		this.areaLineGroup.traverse(obj => {
+			if(obj.geometry){
+				obj.geometry.dispose();
+			}
+			if (obj.material) {
+				obj.material.dispose();
+			}
+        })
+        this.scene.remove(this.areaLabelGroup);
+        this.scene.remove(this.areaLineGroup);
+        this.scene.remove(this.areaGroup);
 	}
 	// 销毁释放内存
 	destory() {
