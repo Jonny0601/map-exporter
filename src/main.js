@@ -3,12 +3,11 @@
  * @version: 
  * @Author: JohnnyZou
  * @Date: 2019-12-18 10:13:30
- * @LastEditors: JohnnyZou
- * @LastEditTime: 2019-12-18 17:26:30
+ * @LastEditors  : JohnnyZou
+ * @LastEditTime : 2020-01-20 15:15:55
  */
 import Vue from 'vue'
 import App from './App.vue'
-// import './plugins/element.js'
 import "normalize.css";
 import {
   Loading,
@@ -23,6 +22,7 @@ import {
   Dialog,
   Input,
 } from 'element-ui';
+
 Vue.use(Loading.directive);
 
 [Row, Col, Upload, Container, Button, Dialog, Input].forEach(c => {
@@ -37,7 +37,7 @@ Vue.prototype.$prompt = MessageBox.prompt;
 Vue.prototype.$notify = Notification;
 Vue.prototype.$message = Message;
 Vue.config.productionTip = false
-
+console.log(process.env.NODE_ENV === "development");
 new Vue({
   render: h => h(App),
 }).$mount('#app')

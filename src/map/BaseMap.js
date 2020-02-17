@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:54:24
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-01-17 11:38:08
+ * @LastEditTime : 2020-01-20 14:46:37
  */
 import * as THREE from "three";
 import Stats from "three/examples/jsm/libs/stats.module.js";
@@ -119,7 +119,7 @@ export default class BaseMap {
 			if (intersects[0]) {
 				this.camera.far = intersects[0].distance + 100;
 				this.camera.updateProjectionMatrix();
-				console.log(this.camera.far);
+				// console.log(this.camera.far);
 				cb && cb(intersects[0].distance);
 			}
 		};

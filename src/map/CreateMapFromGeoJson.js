@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 14:27:13
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-01-17 13:58:20
+ * @LastEditTime : 2020-02-10 15:49:53
  */
 import BaseMap from "./BaseMap"
 import * as d3 from "d3-geo";
@@ -253,6 +253,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
             .scale(1500)
             .translate([0, 0])
             // .fitSize([200, 200], geojson)
+            console.log(mercator, "projection");
         const path = d3.geoPath(mercator);
         const shapesArr = []
         const parsePath = (feature, i) => {
