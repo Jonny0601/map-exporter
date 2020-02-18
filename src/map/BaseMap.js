@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:54:24
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-01-20 14:46:37
+ * @LastEditTime : 2020-02-18 13:44:56
  */
 import * as THREE from "three";
 import Stats from "three/examples/jsm/libs/stats.module.js";
@@ -20,7 +20,8 @@ export default class BaseMap {
 	}
 	init() {
 		this.sceneUpdateArr = [];
-		this.mousePosition = null // 二维坐标 THREE.Vector2类型
+		this.mousePosition = new THREE.Vector2(); // 二维坐标 THREE.Vector2类型
+		this.eventAreaObjects = null; // 与射线相交的物体集合
 		this.raycaster = new THREE.Raycaster(); // 光线投射实例
 		this.raycaster2 = new THREE.Raycaster(); // 光线投射实例
 		this.INTERSECTED = null; // 当前鼠标经过光线投射拾取到的区域mesh
@@ -74,50 +75,55 @@ export default class BaseMap {
 	keyUpHandle(evt) {
 		if (this.INTERSECTED && evt.keyCode === 81) {
 			// this.set.edit && this.set.edit(this.INTERSECTED);
+			console.log(this.INTERSECTED.userData.name)
 			this.editEvent && this.editEvent(this.INTERSECTED);
 		}
 	}
     // 添加事件
     addEvent(eventAreaObjects) {
-		this.raycaster._customId = "raycaster1"
-		this.raycaster.update = () => {
-			if (this.mousePosition) {
-				this.raycaster.setFromCamera(this.mousePosition, this.camera);
-			}
-			// 计算物体和射线的焦点
-			const intersects = this.raycaster.intersectObjects(eventAreaObjects);
-			if (intersects.length > 0) {
-				if (this.INTERSECTED !== intersects[0].object) {
-					if (this.INTERSECTED) {
-						this.INTERSECTED.material.color.set(this.INTERSECTED.userData.preColor);
-					}
-					this.INTERSECTED = intersects[0].object;
-					this.INTERSECTED.material.color.setHex( 0xff0000 );
-				}
-			} else {
+		this.eventAreaObjects = eventAreaObjects;
+		this.labelRenderer.domElement.addEventListener( "mousemove", this.mouseMoveHandle, false);
+    }
+	// 鼠标移动事件
+	mouseMoveHandle = (event) => {
+		// 将鼠标位置归一化为设备坐标。x 和 y 方向的取值范围是 (-1 to +1)
+		const mainCanvas = this.renderer.domElement;
+		const {left, top} = mainCanvas.getBoundingClientRect();
+		this.mousePosition.x = ((event.clientX - left) / mainCanvas.offsetWidth) * 2 - 1;
+		this.mousePosition.y = -((event.clientY - top) / mainCanvas.offsetHeight) * 2 + 1;
+
+		this.raycaster.setFromCamera(this.mousePosition, this.camera);
+		// 计算物体和射线的焦点
+		const intersects = this.raycaster.intersectObjects(this.eventAreaObjects);
+		if (intersects.length > 0) {
+			if (this.INTERSECTED !== intersects[0].object) {
 				if (this.INTERSECTED) {
 					this.INTERSECTED.material.color.set(this.INTERSECTED.userData.preColor);
 				}
-				this.INTERSECTED = null;
+				this.INTERSECTED = intersects[0].object;
+				this.INTERSECTED.material.color.setHex( 0xff0000 );
 			}
-		};
-		const raycaster = this.sceneUpdateArr.find(obj => (obj._customId && obj._customId === "raycaster1"));
-		if (!raycaster) {
-			this.sceneUpdateArr.push(this.raycaster);
-			this.labelRenderer.domElement.addEventListener( "mousemove", this.mouseMoveHandle, false);
+		} else {
+			if (this.INTERSECTED) {
+				this.INTERSECTED.material.color.set(this.INTERSECTED.userData.preColor);
+			}
+			this.INTERSECTED = null;
 		}
-    }
+	}
 	// 实时获取相和网格模型的距离
-	getDistanceFromCamera(eventAreaObjects, cb) {
+	getDistanceFromCamera(areaGroup, cb) {
 		const vec2 = new THREE.Vector2(0, 0);
+		const box3 = new THREE.Box3().expandByObject(areaGroup);
+		// const helper = new THREE.Box3Helper( box3, 0xffff00 );
+		// this.scene.add( helper );
 		this.raycaster2._customId = "raycaster2";
 		this.raycaster2.update = () => {
 			// console.log(this.sceneUpdateArr);
 			this.raycaster.setFromCamera(vec2, this.camera);
 			// 计算物体和射线的焦点
-			const intersects = this.raycaster.intersectObjects(eventAreaObjects);
+			const intersects = this.raycaster.intersectObjects(areaGroup.children);
 			if (intersects[0]) {
-				this.camera.far = intersects[0].distance + 100;
+				this.camera.far = intersects[0].distance + Math.max(box3.max.x - box3.min.x, box3.max.y - box3.min.y) + 100;
 				this.camera.updateProjectionMatrix();
 				// console.log(this.camera.far);
 				cb && cb(intersects[0].distance);
@@ -128,15 +134,6 @@ export default class BaseMap {
 			this.sceneUpdateArr.push(this.raycaster2);
 		}
 	}
-    // 鼠标移动事件
-    mouseMoveHandle = (event) => {
-        // 将鼠标位置归一化为设备坐标。x 和 y 方向的取值范围是 (-1 to +1)
-        this.mousePosition = new THREE.Vector2();
-        const mainCanvas = this.renderer.domElement;
-        const {left, top} = mainCanvas.getBoundingClientRect();
-        this.mousePosition.x = ((event.clientX - left) / mainCanvas.offsetWidth) * 2 - 1;
-		this.mousePosition.y = -((event.clientY - top) / mainCanvas.offsetHeight) * 2 + 1;
-    }
 	createLink (){
 		const a = document.createElement("a"); // 用于导出gltf的a标签
 		a.style.display = "none";
@@ -186,11 +183,15 @@ export default class BaseMap {
 		});
 	}
 	// 绘制label文字
-	drawText(position, text) {
+	drawText(position, html) {
 		const areaDiv = document.createElement("div");
 		areaDiv.style.fontSize = "12px";
 		areaDiv.className = "label";
-		areaDiv.textContent = text;
+		if (typeof html === "string") {
+			areaDiv.innerHTML = html;
+		} else if (html instanceof HTMLElement) {
+			areaDiv.appendChild(html);
+		}
 		const areaLabel = new CSS2DObject(areaDiv);
 		const [x, y, z] = position;
 		areaLabel.position.set(x, y, z);

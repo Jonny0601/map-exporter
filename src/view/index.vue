@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:32:57
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-01-10 18:21:39
+ * @LastEditTime : 2020-02-18 17:48:35
  -->
 <template>
 	<div class="main">
@@ -18,10 +18,27 @@
 				</el-container>
 				<el-container direction="vertical" class="exprot_container">
 					<el-button type="primary" class="primaryBtn" @click="exportScene">导出场景</el-button>
-					<el-button type="primary" class="primaryBtn" @click="exportAreaUnion">导出区域并集json</el-button>
+					<!-- <el-button type="primary" class="primaryBtn" @click="exportAreaUnion">导出区域并集json</el-button> -->
+					<el-button type="primary" class="primaryBtn" @click="drawer = true">使用指南</el-button>
 				</el-container>
 			</el-col>
 		</el-row>
+		<el-drawer
+			title="我是标题"
+			:visible.sync="drawer"
+			:with-header="false"
+			:direction="direction"
+		>	
+			<div class="guide">
+				<h3>使用指南</h3>
+				<ul>
+					<li>
+						<p>desc</p>
+						<img src="" alt="">
+					</li>
+				</ul>
+			</div>
+		</el-drawer>
 	</div>
 </template>
 
@@ -32,7 +49,8 @@ import * as THREE from "three";
 export default {
 	data () {
 		return {
-
+			drawer: false,
+			direction: "rtl"
 		}
 	},
 	components: {
@@ -99,7 +117,7 @@ export default {
 				}
 				threeMapInstance.exportPolygonUnion();
 			}
-		}
+		},
 	},
 	mounted() {
 

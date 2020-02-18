@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 10:13:30
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-01-20 15:15:55
+ * @LastEditTime : 2020-02-18 17:38:13
  */
 import Vue from 'vue'
 import App from './App.vue'
@@ -21,11 +21,33 @@ import {
   Button,
   Dialog,
   Input,
+  Form,
+  FormItem,
+  Checkbox,
+  CheckboxGroup,
+  RadioGroup,
+  RadioButton,
+  Drawer,
 } from 'element-ui';
 
 Vue.use(Loading.directive);
 
-[Row, Col, Upload, Container, Button, Dialog, Input].forEach(c => {
+[
+  Row,
+  Col,
+  Upload,
+  Container,
+  Button,
+  Dialog,
+  Input,
+  Form,
+  FormItem,
+  Checkbox,
+  CheckboxGroup,
+  RadioGroup,
+  RadioButton,
+  Drawer,
+].forEach(c => {
   Vue.use(c, {name: c.name})
 })
 

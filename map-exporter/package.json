@@ -1,0 +1,15 @@
+{
+  "name": "map-exporter",
+  "version": "1.0.0",
+  "description": "地图导出工具",
+  "main": "./dist/mapExporter.umd.min.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "geojson",
+    "地图"
+  ],
+  "author": "JohnnyZou",
+  "license": "ISC"
+}

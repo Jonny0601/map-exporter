@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 14:27:13
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-02-10 15:49:53
+ * @LastEditTime : 2020-02-18 18:40:06
  */
 import BaseMap from "./BaseMap"
 import * as d3 from "d3-geo";
@@ -51,17 +51,22 @@ export default class CreateMapFromGeoJson extends BaseMap {
 		this.mapData = null; // geojson源数据
         this.mapCenter = null; // geojson表示的形状的中心位置
         this.isEdit = false; // 是否处于编辑状态
+        this.isEditPoint = false; // 是否处于编辑点的状态
+        this.maskDiv = null; // 编辑属性是遮罩
     }
     // 删除gui
     destoryGUI() {
         if (this.GUIPanel) {
             this.GUIPanel.destroy();
-            console.log(this.GUIPanel);
-            this.GUIPanel.maskDiv && (this.GUIPanel.maskDiv.style.display = "none");
+            if (this.maskDiv) {
+                this.set.root.removeChild(this.maskDiv);
+                this.maskDiv = null;
+            }
         }
     }
     initBaseGUI(currentMesh) {
         this.destoryGUI();
+        // 如果不是单体编辑状态，即显示通用配置UI
         if (!this.isEdit) {
             const settings = {
                 baseExtrudeHeight: this.areaGroup.userData.baseExtrudeHeight,
@@ -117,9 +122,9 @@ export default class CreateMapFromGeoJson extends BaseMap {
             }).onFinishChange(baseLineColor => {
                 this.areaGroup.userData.baseLineColor = baseLineColor;
             })
-        }else if (currentMesh) {
+        }else if (currentMesh) { // 存在转中的单体，开启单体编辑模式
             // 创建遮罩层
-            if (!this.GUIPanel.maskDiv) {
+            if (!this.maskDiv) {
                 const maskDiv = document.createElement("div");
                 maskDiv.style.position = "absolute";
                 maskDiv.style.left = "0";
@@ -128,22 +133,31 @@ export default class CreateMapFromGeoJson extends BaseMap {
                 maskDiv.style.top = "0";
                 maskDiv.style.zIndex = "1000";
                 maskDiv.style.background = "rgba(0, 0 , 0, 0.3)";
-                this.GUIPanel.maskDiv = maskDiv
-                // 添加一个适当的事件监听器
-                this.GUIPanel.maskDiv.addEventListener("click", () => {
-                    // 退出编辑
-                    this.isEdit = false;
-                    if (this.GUIPanel) {
-                        // console.log(this.GUIPanel.maskDiv);
-                        // this.set.root.removeChild(this.GUIPanel.maskDiv);
-                        // // delete this.GUIPanel.maskDiv;
-                        this.GUIPanel.maskDiv.style.display = "none";
+                this.maskDiv = maskDiv;
+                // 添加一个关闭单体编辑模式的点击事件 
+                this.maskDiv.addEventListener("click", (event) => {
+                    // 如果当前为单体编辑中的点编辑状态
+                    if (this.isEditPoint) {
+                        const vector = new THREE.Vector3();//三维坐标对象
+                        const mainCanvas = this.renderer.domElement;
+                        const {left, top} = mainCanvas.getBoundingClientRect();
+                        vector.x = ((event.clientX - left) / mainCanvas.offsetWidth) * 2 - 1;
+                        vector.y = -((event.clientY - top) / mainCanvas.offsetHeight) * 2 + 1;
+                        vector.z = this.baseExtrudeHeight;
+                        vector.unproject( this.camera );
+                        const raycaster = new THREE.Raycaster(this.camera.position, vector.sub(this.camera.position).normalize());
+                        const intersects = raycaster.intersectObjects([currentMesh]);
+                        const selected = intersects[0]; //取第一个物体
+                        this.set.addAttributePointHandle(selected, currentMesh);
+                    } else {
+                        // 退出编辑
+                        this.isEdit = false;
+                        this.isEditPoint = false;
                         this.initBaseGUI()
                     }
                 }, false);
             }
-            this.GUIPanel.maskDiv.style.display = "block";
-            this.set.root.appendChild(this.GUIPanel.maskDiv);
+            this.set.root.appendChild(this.maskDiv);
             const [cX, cY, cZ] = currentMesh.userData.markCenter;
             const preColor = currentMesh.userData.preColor;
             const settings = {
@@ -152,8 +166,15 @@ export default class CreateMapFromGeoJson extends BaseMap {
                 offsetY: cY,
                 offsetZ: cZ,
                 addAttributesHandle: () => {
+                    if (this.isEditPoint) {
+                        return;
+                    }
                     this.set.addAttributesHandle && this.set.addAttributesHandle(currentMesh);
-                }
+                },
+                addPoint: () => {
+                    this.set.root.style.cursor = "crosshair";
+                    this.isEditPoint = true; // 开启点编辑模式
+                },
             }
             const preFolder = this.GUIPanel.addFolder("单个配置");
             preFolder.open();
@@ -187,11 +208,8 @@ export default class CreateMapFromGeoJson extends BaseMap {
                 })
             })
             preFolder.add(settings, "addAttributesHandle").name("编辑属性");
+            preFolder.add(settings, "addPoint").name("添加位置点");
         }
-
-
-        
-
     }
     // 由于d3-geo转换后的y轴是相对于屏幕是反的，因此需要对转换后的点做一下y轴取反处理
     transformYAxis(pointsArr) {
@@ -200,15 +218,44 @@ export default class CreateMapFromGeoJson extends BaseMap {
         })
     }
 
+    // 更新区域的name text
     updateAreaText(currentMesh) {
         this.areaLabelGroup.children.forEach(obj => {
-            if (currentMesh.userData.tid === obj.userData.tid) {
+            if (currentMesh.uuid === obj.uuid) {
                 obj.element.innerHTML = currentMesh.userData.name;
-                console.log(obj);
             }
         })
     }
-    
+    // 取消添加点
+    cancelAddPoint() {
+        this.isEditPoint = false;
+        this.set.root.style.cursor = "auto";
+    }
+    // 更新区域的图层点位置
+    updateAreaPoints(currentMesh, pointObj) {
+        const { point, pointName, pointType } = pointObj
+        let bgColor = "#000";
+        if (pointType === "lightBeam") { // 光柱黄色点
+            bgColor = "yellow";
+        } else if (pointType === "columnBar"){ // 柱图蓝色点
+            bgColor = "blue";
+        } else {
+            bgColor = "pink"; // 飞线粉色点
+        }
+        const divEl = document.createElement("div");
+        divEl.style.cursor = "pointer";
+        divEl.innerHTML = `<div>${pointName}</div><div style="background:${bgColor}; width:10px; height:10px; border-radius:50%;"></div>`;
+        const areaLabel = this.drawText(
+            [...point, this.baseExtrudeHeight],
+            divEl
+        );
+        divEl.addEventListener("click", e => {
+            this.set.showPointInfoHandle(areaLabel);
+        }, false)
+        areaLabel.pointType = pointType;
+        areaLabel.pointName = pointObj.propertyName;
+        currentMesh.add(areaLabel);
+    }
     // 绘制区域地图
     drawAreaMap(mapData) {
         const polygonUnion = this.computedPolygonUnion(mapData)
@@ -233,7 +280,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
         this.scene.add(this.areaLineGroup);
         this.scene.add(this.areaLabelGroup);
         this.addEvent(this.areaGroup.children);
-        this.getDistanceFromCamera(this.areaGroup.children, (far) => {
+        this.getDistanceFromCamera(this.areaGroup, (far) => {
             this.areaGroup.userData.cameraFar = far;
         });
         this.initBaseGUI();
@@ -358,6 +405,10 @@ export default class CreateMapFromGeoJson extends BaseMap {
             preColor: this.baseColor,
             markCenter: [center.x, center.y, this.baseExtrudeHeight],
             staticCenter: [center.x, center.y, this.baseExtrudeHeight],
+            lightBeam: {},
+            flyLine: {},
+            columnBar: {},
+            name: "mark",
             ...property,
         };
         const areaLabel = this.drawText(  
@@ -372,19 +423,6 @@ export default class CreateMapFromGeoJson extends BaseMap {
         // console.log(helper)
         // this.scene.add( helper );
         return mesh;
-    }
-
-    // 创建圆柱柱图
-    createCylinderBar(position) {
-        const geometry = new THREE.CylinderBufferGeometry(0.5, 0.5, 5, 60);
-        const material = new THREE.MeshBasicMaterial({
-            color: "blue",
-        });
-        const cylinder = new THREE.Mesh( geometry, material );
-        const [x, y, z] = position;
-        cylinder.position.set(x, y, -(5 / 2));
-        cylinder.rotateX(Math.PI / 2);
-        return cylinder;
     }
 
     // 绘制轮廓线条 points: vec2[]
@@ -409,6 +447,10 @@ export default class CreateMapFromGeoJson extends BaseMap {
         });
         matLine.resolution.set(this.set.renderWidth, this.set.renderHeight);
         const line = new Line2( geometry, matLine);
+        line.renderOrder = 399;
+        line.onBeforeRender = (renderer) => {
+            renderer.clearDepth();
+        };
         return line;
     }
     // 开启编辑模式
