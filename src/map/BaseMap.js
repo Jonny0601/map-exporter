@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:54:24
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-02-18 13:44:56
+ * @LastEditTime : 2020-02-19 10:04:16
  */
 import * as THREE from "three";
 import Stats from "three/examples/jsm/libs/stats.module.js";
@@ -211,10 +211,10 @@ export default class BaseMap {
 		};
 		gltfExporter.parse(input, ( result ) => {
 			if ( result instanceof ArrayBuffer ) {
-					this.saveArrayBuffer(result, "scene.glb");
+					this.saveArrayBuffer(result, `${this.sceneName}.glb`);
 			} else {
 					const output = JSON.stringify( result, null, 2 );
-					this.saveString(output, "scene.gltf");
+					this.saveString(output, `${this.sceneName}.gltf`);
 			}
 		}, options );
 	}

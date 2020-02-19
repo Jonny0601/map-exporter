@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:32:57
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-02-18 17:48:35
+ * @LastEditTime : 2020-02-19 10:33:01
  -->
 <template>
 	<div class="main">
@@ -28,13 +28,16 @@
 			:visible.sync="drawer"
 			:with-header="false"
 			:direction="direction"
+			custom-class="drawer-box"
 		>	
-			<div class="guide">
-				<h3>使用指南</h3>
+			<div class="guide" v-for="(item, i) in guideData" :key="i">
+				<h2>{{ i+1 }}.{{ item.title }}</h2>
+				<p v-html="item.desc"></p>
 				<ul>
-					<li>
-						<p>desc</p>
-						<img src="" alt="">
+					<li v-for="(subItem, j) in item.imgList" :key="j">
+						<h5>{{ subItem.imgDesc }}</h5>
+						<img class="guideImg" :src="subItem.url" alt=""/>
+						<p class="tip" v-if="subItem.tip">{{ subItem.tip }}</p>
 					</li>
 				</ul>
 			</div>
@@ -46,11 +49,13 @@
 import ThreeMap from "../components/threeMap";
 import UpLoader from "../components/upLoader";
 import * as THREE from "three";
+import guideData from "./guide.data.js";
 export default {
 	data () {
 		return {
 			drawer: false,
-			direction: "rtl"
+			direction: "rtl",
+			guideData,
 		}
 	},
 	components: {
@@ -142,6 +147,25 @@ export default {
 				margin: 0;
 				margin-bottom: 10%;
 			}
+		}
+	}
+}
+.main /deep/ .drawer-box{
+	overflow-y: scroll;
+	overflow-x: hidden;
+	padding: 0 10px;
+	padding-bottom: 20px;
+	line-height: 22px;
+	letter-spacing: 2px;
+	.guide{
+		text-align: left;
+		.guideImg{
+			width: 100%;
+			display: block;
+		}
+		.tip{
+			font-size: 12px;
+			color: red;
 		}
 	}
 }

@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 14:27:13
  * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-02-18 18:40:06
+ * @LastEditTime : 2020-02-19 10:03:34
  */
 import BaseMap from "./BaseMap"
 import * as d3 from "d3-geo";
@@ -37,7 +37,8 @@ export default class CreateMapFromGeoJson extends BaseMap {
 	initMapProperty() {
 		this.vector3Json = []; // 经过解析转换后的geojson数据
 		this.extrudeHeight = 0.5; // 多边形的挤压高度
-		this.baseExtrudeHeight = 0.5; // 初始多边形的挤压高度
+        this.baseExtrudeHeight = 0.5; // 初始多边形的挤压高度
+        this.sceneName = "scene"; // 场景名称
         this.baseColor = "#328496"; // 初始多边形颜色
         this.baseLineColor = "#00b4cd";
         this.baseLineWidth = 3;
@@ -69,6 +70,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
         // 如果不是单体编辑状态，即显示通用配置UI
         if (!this.isEdit) {
             const settings = {
+                sceneName: this.sceneName,
                 baseExtrudeHeight: this.areaGroup.userData.baseExtrudeHeight,
                 baseLineWidth: this.baseLineWidth,
                 baseColor: this.baseColor,
@@ -76,6 +78,9 @@ export default class CreateMapFromGeoJson extends BaseMap {
             }
             const commonFolder = this.GUIPanel.addFolder("统一配置")
             commonFolder.open();
+            commonFolder.add(settings, "sceneName").name("场景名称").onChange(sceneName => {
+                this.sceneName = sceneName;
+            });
             commonFolder.add(settings, "baseExtrudeHeight", 0.1, 100, 0.1).name("区块高度").onChange(baseExtrudeHeight => {
                 baseExtrudeHeight = Number(baseExtrudeHeight);
                 this.areaGroup.children.forEach((obj) => {
@@ -221,7 +226,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
     // 更新区域的name text
     updateAreaText(currentMesh) {
         this.areaLabelGroup.children.forEach(obj => {
-            if (currentMesh.uuid === obj.uuid) {
+            if (currentMesh.uuid === obj.userData.uuid) {
                 obj.element.innerHTML = currentMesh.userData.name;
             }
         })
@@ -415,9 +420,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
             [center.x, center.y, this.baseExtrudeHeight],
             mesh.userData.name || mesh.userData.id || `mark`
         );
-        areaLabel.userData = {
-            ...property
-        }
+        areaLabel.userData.uuid = mesh.uuid;
         this.areaLabelGroup.add(areaLabel);
         // const helper = new THREE.Box3Helper(mesh.geometry.boundingBox, 0xffff00);
         // console.log(helper)
