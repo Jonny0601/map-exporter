@@ -1,6 +1,6 @@
 {
   "name": "map-exporter",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "地图导出工具",
   "main": "./dist/mapExporter.umd.min.js",
   "scripts": {

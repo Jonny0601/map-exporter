@@ -3,8 +3,8 @@
  * @version: 
  * @Author: JohnnyZou
  * @Date: 2019-12-18 14:27:13
- * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-02-19 10:03:34
+ * @LastEditors: JohnnyZou
+ * @LastEditTime: 2020-03-03 15:09:05
  */
 import BaseMap from "./BaseMap"
 import * as d3 from "d3-geo";
@@ -189,7 +189,8 @@ export default class CreateMapFromGeoJson extends BaseMap {
             })
             preFolder.add(settings, "offsetX", cX - 10, cX + 10, 0.01).name("x轴偏移").onChange(offsetX => {
                 this.areaLabelGroup.children.forEach(obj => {
-                    if (currentMesh.userData.tid === obj.userData.tid) {
+                    if (currentMesh.uuid === obj.userData.uuid) {
+                        console.log(1)
                         obj.position.x = offsetX;
                         currentMesh.userData.markCenter[0] = offsetX;
                     }
@@ -197,7 +198,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
             })
             preFolder.add(settings, "offsetY", cY - 10, cY + 10, 0.01).name("y轴偏移").onChange(offsetY => {
                 this.areaLabelGroup.children.forEach(obj => {
-                    if (currentMesh.userData.tid === obj.userData.tid) {
+                    if (currentMesh.uuid === obj.userData.uuid) {
                         obj.position.y = offsetY;
                         currentMesh.userData.markCenter[1] = offsetY;
                     }
@@ -205,7 +206,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
             })
             preFolder.add(settings, "offsetZ", cZ - 10, cZ + 10, 0.01).name("z轴偏移").onChange(offsetZ => {
                 this.areaLabelGroup.children.forEach(obj => {
-                    if (currentMesh.userData.tid === obj.userData.tid) {
+                    if (currentMesh.uuid === obj.userData.uuid) {
                         obj.position.z = offsetZ;
                         currentMesh.userData.markCenter[2] = offsetZ;
                         currentMesh.userData.staticCenter[2] = offsetZ;
