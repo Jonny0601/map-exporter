@@ -3,8 +3,8 @@
  * @version: 
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:14:41
- * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-02-18 16:34:05
+ * @LastEditors: JohnnyZou
+ * @LastEditTime: 2020-05-15 18:23:58
  -->
 <template>
 	<div class="wrapper">
@@ -51,6 +51,7 @@
 							<el-radio-button label="lightBeam">光柱位置点</el-radio-button>
 							<el-radio-button label="flyLine">飞线位置点</el-radio-button>
 							<el-radio-button label="columnBar">柱图位置点</el-radio-button>
+							<el-radio-button label="pointLayer">区块位置点</el-radio-button>
 						</el-radio-group>
 					</el-form-item>
 					<el-form-item label="点名称">
@@ -121,6 +122,7 @@ export default {
 				lightBeam: "光柱点",
 				flyLine: "飞线点",
 				columnBar: "柱图点",
+				pointLayer: "区块位置点",
 			}
 			const name = map[this.form.pointType];
 			if (this.currentEditAreaMesh) {
@@ -243,6 +245,7 @@ export default {
 		// 点的表单提交
 		addPoint() {
 			console.log(this.form);
+			console.log(this.selectedObj, "currentMesh");
 			if(!this.form.pointType.length){
 				return this.$notify.error({
 					title: '错误提示',
@@ -261,6 +264,7 @@ export default {
 				name: this.pointName,
 				value: [x, y]
 			};
+			debugger
 			if (this.threeMapInstance) {
 				this.threeMapInstance.updateAreaPoints(this.currentEditAreaMesh, {
 					...this.form,
@@ -283,6 +287,7 @@ export default {
 					lightBeam: "光柱点",
 					flyLine: "飞线点",
 					columnBar: "柱图点",
+					pointLayer: "区块位置点",
 				}
 				const mesh = this.pointAreaLabel.parent;
 				const pointObj = mesh.userData[this.pointAreaLabel.pointType];

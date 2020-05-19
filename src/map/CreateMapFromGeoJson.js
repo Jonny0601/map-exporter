@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 14:27:13
  * @LastEditors: JohnnyZou
- * @LastEditTime: 2020-03-03 15:09:05
+ * @LastEditTime: 2020-05-15 18:07:45
  */
 import BaseMap from "./BaseMap"
 import * as d3 from "d3-geo";
@@ -213,8 +213,8 @@ export default class CreateMapFromGeoJson extends BaseMap {
                     }
                 })
             })
-            preFolder.add(settings, "addAttributesHandle").name("编辑属性");
-            preFolder.add(settings, "addPoint").name("添加位置点");
+            preFolder.add(settings, "addAttributesHandle").name("编辑属性(点我)");
+            preFolder.add(settings, "addPoint").name("添加位置点(点我)");
         }
     }
     // 由于d3-geo转换后的y轴是相对于屏幕是反的，因此需要对转换后的点做一下y轴取反处理
@@ -245,8 +245,10 @@ export default class CreateMapFromGeoJson extends BaseMap {
             bgColor = "yellow";
         } else if (pointType === "columnBar"){ // 柱图蓝色点
             bgColor = "blue";
-        } else {
-            bgColor = "pink"; // 飞线粉色点
+        } else if (pointType === "flyLine") { // 飞线粉色点
+            bgColor = "pink"
+        } else { // 区块位置点 绿色
+            bgColor = "green"; 
         }
         const divEl = document.createElement("div");
         divEl.style.cursor = "pointer";
@@ -414,12 +416,19 @@ export default class CreateMapFromGeoJson extends BaseMap {
             lightBeam: {},
             flyLine: {},
             columnBar: {},
+            pointLayer: {},
             name: "mark",
             ...property,
         };
+        const html = `
+            <div style="display: flex;align-items: center;">
+                <p style="width: 12px;height: 12px; background: #fff;border-radius: 50%"></p>
+                <p style="margin-left: 5px;">${mesh.userData.name || mesh.userData.id || ""}</p>
+            </div>
+        `
         const areaLabel = this.drawText(  
             [center.x, center.y, this.baseExtrudeHeight],
-            mesh.userData.name || mesh.userData.id || `mark`
+            html
         );
         areaLabel.userData.uuid = mesh.uuid;
         this.areaLabelGroup.add(areaLabel);
