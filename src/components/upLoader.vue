@@ -3,8 +3,8 @@
  * @version: 
  * @Author: JohnnyZou
  * @Date: 2019-12-18 10:25:59
- * @LastEditors  : JohnnyZou
- * @LastEditTime : 2019-12-31 09:58:59
+ * @LastEditors: JohnnyZou
+ * @LastEditTime: 2020-07-06 11:46:02
  -->
 <template>
 	<div class="container">
@@ -20,8 +20,8 @@
 			:on-change="handleChange"
 		>
 			<i class="el-icon-upload"></i>
-			<div class="el-upload__text">将geojson文件拖到此处，或<em>点击上传</em></div>
-			<div class="el-upload__tip" slot="tip">只能上传.json、.geojson文件</div>
+			<div class="el-upload__text">将geojson或模型文件拖到此处，或<em>点击上传</em></div>
+			<div class="el-upload__tip" slot="tip">只能上传.json、.geojson、.gltf、.glb、.svg文件</div>
 		</el-upload>
   </div>
 </template>
@@ -31,21 +31,21 @@ export default {
 	name: "UPLOADERGEO",
 	data () {
 		return {
-			accept: ".json,.geojson"
+			accept: ".json,.geojson,.gltf,.glb,.svg"
 		}
 	},
 	methods: {
 		handleRemove(file, fileList) {
-			return this.fileReaderHandle(file.raw).then(fileJson => {
-				this.$emit("removeFile", fileJson, file, fileList);
+			return this.fileReaderHandle(file).then(fileObj => {
+				this.$emit("removeFile");
 			}).catch(error => {
 				console.log(error.message);
 			})
 			
 		},
 		handlePreview(file) {
-			return this.fileReaderHandle(file.raw).then(fileJson => {
-				this.$emit("filePreview", fileJson)
+			return this.fileReaderHandle(file).then(fileObj => {
+				this.$emit("filePreview", fileObj)
 			}).catch(error => {
 				this.$notify.error({
 					title: '错误',
@@ -58,8 +58,9 @@ export default {
 		},
 		// 文件添加时
 		handleChange (file, fileList) {
-			return this.fileReaderHandle(file.raw).then(fileJson => {
-				this.$emit("addFile", fileJson, fileList);
+			console.log(file, fileList);
+			return this.fileReaderHandle(file).then(fileObj => {
+				this.$emit("addFile", fileObj, fileList);
 			}).catch(error => {
 				this.$notify.error({
 					title: '错误',
@@ -68,18 +69,42 @@ export default {
 			})
 		},
 
-		fileReaderHandle(fileRaw) {
+		fileReaderHandle(file) {
+			const reader = new FileReader(); // 新建一个FileReader
 			return new Promise((resolve, reject) => {
-				const reader = new FileReader(); // 新建一个FileReader
-				reader.readAsText(fileRaw, "UTF-8"); // 读取文件 
+				const extArr = file.name.match(/\.(glb|gltf|svg|json|geojson|geoJson)$/g);
+				console.log(extArr);
+				let type = "json"
+				const ext = extArr ? extArr[0] : null;
+				if (!ext) {
+					return reject(new Error("未知文件"))
+				}
+				if (ext === ".json" || ext === ".geojson" || ext === ".geoJson") {  // geojson
+					reader.readAsText(file.raw, "UTF-8");
+				} else if (ext === "gltf"){
+					type = "model"
+					reader.readAsText(file.raw, "UTF-8");
+				} else if (ext === ".glb") {
+					type = "model"
+					reader.readAsArrayBuffer(file.raw)
+				} else if (ext === ".svg") {
+					type = "svg"
+					reader.readAsText(file.raw, "UTF-8");
+				}
 				reader.onload = (evt) => { //读取完文件之后会回来这里
-					const fileString = evt.target.result; // 读取文件内容
 					try{
-						resolve(JSON.parse(fileString));
+						const result = {
+							content: evt.target.result,
+							type,
+							name: file.name
+						}
+						if (ext !== ".glb" && ext !== ".svg") {
+							result.content = JSON.parse(result.content);
+						}
+						resolve(result);
 					}catch(e){
 						reject(e);
 					}
-					
 				}
 			});
 		}

@@ -4,18 +4,18 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 14:27:13
  * @LastEditors: JohnnyZou
- * @LastEditTime: 2020-05-15 18:07:45
+ * @LastEditTime: 2020-07-07 11:40:23
  */
 import BaseMap from "./BaseMap"
 import * as d3 from "d3-geo";
-import { union, centroid } from "@turf/turf";
+import { union, centroid, polygon } from "@turf/turf";
 import * as THREE from "three";
 import d3threeD from "./d3ThreeD";
 import { GUI } from "three/examples/jsm/libs/dat.gui.module";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
-export default class CreateMapFromGeoJson extends BaseMap {
+export default class CreateMap extends BaseMap {
 	constructor(set){
         super(set);
         this.initMapProperty();
@@ -32,11 +32,11 @@ export default class CreateMapFromGeoJson extends BaseMap {
             this.GUIPanel.domElement.style.zIndex = "1001";
             this.set.root.appendChild(this.GUIPanel.domElement);
         }
+        window.regionMap = this;
 	}
 	// 初始化属性
 	initMapProperty() {
 		this.vector3Json = []; // 经过解析转换后的geojson数据
-		this.extrudeHeight = 0.5; // 多边形的挤压高度
         this.baseExtrudeHeight = 0.5; // 初始多边形的挤压高度
         this.sceneName = "scene"; // 场景名称
         this.baseColor = "#328496"; // 初始多边形颜色
@@ -148,10 +148,12 @@ export default class CreateMapFromGeoJson extends BaseMap {
                         const {left, top} = mainCanvas.getBoundingClientRect();
                         vector.x = ((event.clientX - left) / mainCanvas.offsetWidth) * 2 - 1;
                         vector.y = -((event.clientY - top) / mainCanvas.offsetHeight) * 2 + 1;
-                        vector.z = this.baseExtrudeHeight;
+                        vector.z = this.type === "model" ? -this.baseExtrudeHeight : this.baseExtrudeHeight;
                         vector.unproject( this.camera );
                         const raycaster = new THREE.Raycaster(this.camera.position, vector.sub(this.camera.position).normalize());
                         const intersects = raycaster.intersectObjects([currentMesh]);
+                        console.log(currentMesh)
+                        console.log(intersects)
                         const selected = intersects[0]; //取第一个物体
                         this.set.addAttributePointHandle(selected, currentMesh);
                     } else {
@@ -190,7 +192,6 @@ export default class CreateMapFromGeoJson extends BaseMap {
             preFolder.add(settings, "offsetX", cX - 10, cX + 10, 0.01).name("x轴偏移").onChange(offsetX => {
                 this.areaLabelGroup.children.forEach(obj => {
                     if (currentMesh.uuid === obj.userData.uuid) {
-                        console.log(1)
                         obj.position.x = offsetX;
                         currentMesh.userData.markCenter[0] = offsetX;
                     }
@@ -228,6 +229,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
     updateAreaText(currentMesh) {
         this.areaLabelGroup.children.forEach(obj => {
             if (currentMesh.uuid === obj.userData.uuid) {
+                currentMesh.name = currentMesh.userData.name;
                 obj.element.innerHTML = currentMesh.userData.name;
             }
         })
@@ -252,7 +254,12 @@ export default class CreateMapFromGeoJson extends BaseMap {
         }
         const divEl = document.createElement("div");
         divEl.style.cursor = "pointer";
-        divEl.innerHTML = `<div>${pointName}</div><div style="background:${bgColor}; width:10px; height:10px; border-radius:50%;"></div>`;
+        divEl.innerHTML = `
+            <div style="display: flex;flex-direction: column;align-items: center;">
+                <div>${pointName}</div>
+                <div style="background:${bgColor}; width:10px; height:10px; border-radius:50%;"></div>
+            </div>
+        `;
         const areaLabel = this.drawText(
             [...point, this.baseExtrudeHeight],
             divEl
@@ -265,25 +272,112 @@ export default class CreateMapFromGeoJson extends BaseMap {
         currentMesh.add(areaLabel);
     }
     // 绘制区域地图
-    drawAreaMap(mapData) {
-        const polygonUnion = this.computedPolygonUnion(mapData)
-        // 计算整个区域中心
-        try{
-            this.mapCenter = centroid(polygonUnion).geometry.coordinates;
-        }catch(e){
-            this.mapCenter = d3.geoCentroid(mapData)
+    drawAreaMap(mapData, type) {
+        this.type = type;
+        if (type === "json") {
+            const polygonUnion = this.computedPolygonUnion(mapData)
+            // 计算整个区域中心
+            try{
+                this.mapCenter = centroid(polygonUnion).geometry.coordinates;
+            }catch(e){
+                this.mapCenter = d3.geoCentroid(mapData)
+            }
+            this.mapData = mapData;
+            console.log(this.mapData, "geojson");
+            console.log(this.mapCenter, "polygonUnion center");
+            const shapesArr = this.drawGeoSVG(mapData);
+            this.drawExtrudeGeometryMesh(shapesArr);
+            if(polygonUnion){
+                const shapesArr = this.drawGeoSVG(polygonUnion);
+                const {mesh, shape} = this.drawPolygonUnion(shapesArr[0].shapes);
+                this.areaGroup.userData.polygonUnionShape = shape;
+                this.scene.add(mesh);
+            }
+        } else if (type === "model") {
+            //...
+            this.sceneName = mapData.fileName.split(".")[0];
+            const scene = mapData.scene;
+            const [areaGroup, camera] = scene.children;
+            this.baseExtrudeHeight = areaGroup.userData.baseExtrudeHeight; // 初始多边形的挤压高度
+            this.baseColor = areaGroup.userData.baseColor; // 初始多边形颜色
+            this.baseLineColor = areaGroup.userData.baseLineColor;
+            this.baseLineWidth = areaGroup.userData.baseLineWidth;
+            this.camera.copy(camera);
+            this.areaGroup.userData = areaGroup.userData;
+            areaGroup.children.forEach(mesh => {
+                const {shape: shapeJSON} = mesh.geometry.userData;
+                const shape = new THREE.Shape().fromJSON(shapeJSON);
+                const points = shape.getPoints();
+                const newMesh = this.getAeraMesh(shape, mesh.userData, "model")
+                this.areaLineGroup.add(this.getAreaLineMesh((points)))
+                const {columnBar, flyLine, lightBeam, pointLayer} = mesh.userData; 
+                const pointTypeMap = [
+                    {pointType: "columnBar", val: columnBar},
+                    {pointType: "flyLine", val: flyLine},
+                    {pointType: "lightBeam", val: lightBeam},
+                    {pointType: "pointLayer", val: pointLayer}
+                ]
+                for (const layerPoint of pointTypeMap) {
+                    for (const [key, val] of Object.entries(layerPoint.val)) {
+                        this.updateAreaPoints(newMesh, {
+                            pointType: layerPoint.pointType,
+                            pointName: val.name,
+                            propertyName: key,
+                            point: val.value,
+                        })
+                    }
+                }
+                this.areaGroup.add(newMesh);
+            })
+
+        }else if (type === "svg") {
+            let shapesArr = []
+            const center = new THREE.Vector3();
+            for (const shapePath of mapData.paths) {
+                shapesArr = shapesArr.concat(shapePath.toShapes(true))
+            }
+            const shapeGeometry = new THREE.ShapeGeometry(shapesArr); 
+            shapeGeometry.computeBoundingBox();
+            center.copy(shapeGeometry.boundingBox.center());
+
+            const plgArr = [];
+            shapesArr = shapesArr.map((shape, i) => {
+                const points = shape.getPoints();
+                for (const point of points) {
+                    point.sub(center);
+                    point.multiplyScalar(0.05);
+                }
+                const tShape = new THREE.Shape().setFromPoints(points);
+                const tPoints = points.map(p => {
+                    const [x, y] = p.toArray();
+                    return [x, -y];
+                });
+                if (tPoints[0] !== tPoints[tPoints.length - 1]) {
+                    tPoints[tPoints.length] = tPoints[0];
+                }
+                plgArr.push(polygon([tPoints]))
+                return {
+                    shapes: [tShape],
+                    shapeDescData: {
+                        tid: `tid${i + 1}`,
+                    },
+                }
+            })
+            this.drawExtrudeGeometryMesh(shapesArr)
+
+            // 生成区块并集区域
+            const unionPlg = union(...plgArr);
+            console.log(unionPlg);
+            let coordinatesArr = []
+            for (let coordinates of unionPlg.geometry.coordinates) {
+                coordinates = coordinates.map(p => new THREE.Vector3().fromArray([...p, 0]));
+                coordinatesArr = coordinatesArr.concat(coordinates)
+            }
+            console.log(coordinatesArr);
+            const unionShape = new THREE.Shape().setFromPoints(coordinatesArr);
+            this.areaGroup.userData.polygonUnionShape = unionShape;
         }
-        this.mapData = mapData;
-        console.log(this.mapData, "geojson");
-        console.log(this.mapCenter, "polygonUnion center");
-        const shapesArr = this.drawGeoSVG(mapData);
-        this.drawExtrudeGeometryMesh(shapesArr);
-        if(polygonUnion){
-            const shapesArr = this.drawGeoSVG(polygonUnion);
-            const {mesh, shape} = this.drawPolygonUnion(shapesArr[0].shapes);
-            this.areaGroup.userData.polygonUnionShape = shape;
-            this.scene.add(mesh);
-        }
+        console.log(this.areaGroup);
         this.scene.add(this.areaGroup);
         this.scene.add(this.areaLineGroup);
         this.scene.add(this.areaLabelGroup);
@@ -308,7 +402,6 @@ export default class CreateMapFromGeoJson extends BaseMap {
             .scale(1500)
             .translate([0, 0])
             // .fitSize([200, 200], geojson)
-            console.log(mercator, "projection");
         const path = d3.geoPath(mercator);
         const shapesArr = []
         const parsePath = (feature, i) => {
@@ -360,7 +453,6 @@ export default class CreateMapFromGeoJson extends BaseMap {
                 const areaLineMesh = this.getAreaLineMesh(this.transformYAxis(pointsArr));
                 this.areaLineGroup.add(areaLineMesh);
                 this.areaGroup.add(areaMesh);
-                console.log(areaMesh);
             })
         })
     }
@@ -387,7 +479,7 @@ export default class CreateMapFromGeoJson extends BaseMap {
 	}
 	
 	// 绘制带高度的区域mesh
-    getAeraMesh(shape, property = {}) {
+    getAeraMesh(shape, property = {}, type) {
         const extrudeOpts = {
             bevelThickness: 0,
             bevelSize: 0,
@@ -396,7 +488,10 @@ export default class CreateMapFromGeoJson extends BaseMap {
             bevelEnabled: false,
             depth: this.baseExtrudeHeight
         };
-        const newShape = new THREE.Shape().setFromPoints(this.transformYAxis(shape.getPoints()))
+        let newShape =  new THREE.Shape().setFromPoints(this.transformYAxis(shape.getPoints()))
+        if (type === "model") {
+            newShape = shape;
+        }
         const geometry = new THREE.ExtrudeBufferGeometry(newShape, extrudeOpts);
         geometry.userData.shape = newShape;
         const material = new THREE.MeshBasicMaterial({
@@ -417,9 +512,19 @@ export default class CreateMapFromGeoJson extends BaseMap {
             flyLine: {},
             columnBar: {},
             pointLayer: {},
-            name: "mark",
+            name: `mark`,
             ...property,
         };
+        const areaLabel = this.drawLabel(mesh);
+        this.areaLabelGroup.add(areaLabel);
+        // const helper = new THREE.Box3Helper(mesh.geometry.boundingBox, 0xffff00);
+        // console.log(helper)
+        // this.scene.add( helper );
+        mesh.name = mesh.userData.name;
+        return mesh;
+    }
+    drawLabel(mesh) {
+        const [x, y, z] = mesh.userData.markCenter; 
         const html = `
             <div style="display: flex;align-items: center;">
                 <p style="width: 12px;height: 12px; background: #fff;border-radius: 50%"></p>
@@ -427,24 +532,19 @@ export default class CreateMapFromGeoJson extends BaseMap {
             </div>
         `
         const areaLabel = this.drawText(  
-            [center.x, center.y, this.baseExtrudeHeight],
+            [x, y, z],
             html
         );
         areaLabel.userData.uuid = mesh.uuid;
-        this.areaLabelGroup.add(areaLabel);
-        // const helper = new THREE.Box3Helper(mesh.geometry.boundingBox, 0xffff00);
-        // console.log(helper)
-        // this.scene.add( helper );
-        return mesh;
+        return areaLabel;
     }
-
     // 绘制轮廓线条 points: vec2[]
     getAreaLineMesh(points) {
         const color = new THREE.Color();
         const positions = [];
         const colors = [];
         points.forEach((p, i) => {
-            positions.push(p.x, p.y, this.baseExtrudeHeight);
+            positions.push(p.x, p.y, this.areaGroup.userData.baseExtrudeHeight);
             color.setHSL(i / points.length, 1.0, 0.5);
             colors.push(color.r, color.g, color.b);
         })
@@ -452,8 +552,8 @@ export default class CreateMapFromGeoJson extends BaseMap {
         geometry.setPositions(positions);
         geometry.setColors(colors);
         const matLine = new LineMaterial({
-            color: this.baseLineColor,
-            linewidth: this.baseLineWidth, // in pixels
+            color: this.areaGroup.userData.baseLineColor,
+            linewidth: this.areaGroup.userData.baseLineWidth, // in pixels
             // vertexColors: THREE.VertexColors,
             //resolution:  // to be set by renderer, eventually
             dashed: false
@@ -533,5 +633,5 @@ export default class CreateMapFromGeoJson extends BaseMap {
 		this.removeAllMesh();
 		this.initMapProperty();
 		this.labelRenderer.domElement.innerHTML = "";
-	}
+    }
 }

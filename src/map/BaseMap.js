@@ -3,8 +3,8 @@
  * @version: 
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:54:24
- * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-02-19 10:04:16
+ * @LastEditors: JohnnyZou
+ * @LastEditTime: 2020-07-07 10:57:14
  */
 import * as THREE from "three";
 import Stats from "three/examples/jsm/libs/stats.module.js";
@@ -12,11 +12,13 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
+import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader";
 window.THREE = THREE;
 export default class BaseMap {
 	constructor(set){
 		this.set = set;
 		this.init();
+		window.baseMap = this
 	}
 	init() {
 		this.sceneUpdateArr = [];
@@ -27,6 +29,7 @@ export default class BaseMap {
 		this.INTERSECTED = null; // 当前鼠标经过光线投射拾取到的区域mesh
 		this.link = this.createLink();
 		this.gltfLoader = new GLTFLoader();
+		this.SVGLoader = new SVGLoader();
 		this.scene = new THREE.Scene();
 		this.renderer = new THREE.WebGLRenderer({
 				antialias: true, // 开启抗锯齿
@@ -211,10 +214,10 @@ export default class BaseMap {
 		};
 		gltfExporter.parse(input, ( result ) => {
 			if ( result instanceof ArrayBuffer ) {
-					this.saveArrayBuffer(result, `${this.sceneName}.glb`);
+				this.saveArrayBuffer(result, `${this.sceneName}.glb`);
 			} else {
-					const output = JSON.stringify( result, null, 2 );
-					this.saveString(output, `${this.sceneName}.gltf`);
+				const output = JSON.stringify( result, null, 2 );
+				this.saveString(output, `${this.sceneName}.gltf`);
 			}
 		}, options );
 	}
@@ -251,5 +254,21 @@ export default class BaseMap {
 				}
 			);
 		});
+	}
+	// 解析glb为gltf
+	glb2gltf(buffer) {
+		return new Promise((resolve, reject) => {
+			this.gltfLoader.parse(buffer, "", (gltf) => {
+				resolve(gltf)
+			}, (e) => {
+				reject(e);
+			})
+		});
+	}
+	parseSVG(str) {
+		return new Promise((resolve, reject) => {
+			const svg = this.SVGLoader.parse(str);
+			resolve(svg)
+		})
 	}
 }

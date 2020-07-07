@@ -44,7 +44,7 @@
       "no-console": "off",
       "no-unused-vars": "off",
       "no-debugger": "off",
-      "no-fallthrough":"off"
+      "no-fallthrough": "off"
     },
     "parserOptions": {
       "parser": "babel-eslint"

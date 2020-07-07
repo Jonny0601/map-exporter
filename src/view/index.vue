@@ -3,8 +3,8 @@
  * @version: 
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:32:57
- * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-02-19 10:33:01
+ * @LastEditors: JohnnyZou
+ * @LastEditTime: 2020-07-06 13:44:02
  -->
 <template>
 	<div class="main">
@@ -64,41 +64,51 @@ export default {
 	},
 	methods: {
 		// 文件添加触发
-		addFileHandle(fileJson, fileList) {
-			this.removeFileHandle(fileJson, fileList);
-			if(fileJson.type === "Feature") {
-				fileJson = {
-					type: "FeatureCollection",
-					features: [fileJson]
+		async addFileHandle(obj, fileList) {
+			this.removeFileHandle();
+			let { type, content, name } = obj;
+			if (type === "model") {
+				if (content instanceof ArrayBuffer) {
+					content = await this.$refs.threeMap.threeMapInstance.glb2gltf(content);
 				}
-			}
-			let canRender = true;
-			fileJson.features.forEach(feature => {
-				if(feature.geometry.type !== "MultiPolygon" && feature.geometry.type !== "Polygon"){
-					canRender = false
+				content.fileName = name;
+			}else if (type === "svg") {
+				content = await this.$refs.threeMap.threeMapInstance.parseSVG(content);
+			} else {
+				if(content.type === "Feature") {
+					content = {
+						type: "FeatureCollection",
+						features: [content]
+					}
 				}
-			});
-			if (!canRender) {
-				return this.$notify.error({
-					title: '错误',
-					message: "当前只支持MultiPolygon和Polygon类型的geojson编辑，点线暂未支持"
-				});
+				let canRender = true;
+				for (const feature of content.features) {
+					if(feature.geometry.type !== "MultiPolygon" && feature.geometry.type !== "Polygon"){
+						canRender = false
+						break;
+					}
+				}
+				if (!canRender) {
+					return this.$notify.error({
+						title: '错误',
+						message: "当前只支持MultiPolygon和Polygon类型的geojson编辑，点线暂未支持"
+					});
+				}
+				
 			}
-			if (this.$refs.threeMap.threeMapInstance) {
-				this.$refs.threeMap.threeMapInstance.drawAreaMap(fileJson);
-			}
+			this.$refs.threeMap.threeMapInstance.drawAreaMap(content, type);
 		},
 		// 文件移除触发
-		removeFileHandle(fileJson, fileList) {
+		removeFileHandle() {
 			if (this.$refs.threeMap.threeMapInstance) {
 				const threeMapInstance = this.$refs.threeMap.threeMapInstance;
 				threeMapInstance.destory();
 			}
 		},
 		// 文件预览触发
-		filePreviewHandle(fileJson) {
+		filePreviewHandle(fileObj) {
 			this.removeFileHandle();
-			this.addFileHandle(fileJson)
+			this.addFileHandle(fileObj)
 		},
 		// 导出场景
 		exportScene() {

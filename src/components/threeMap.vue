@@ -4,7 +4,7 @@
  * @Author: JohnnyZou
  * @Date: 2019-12-18 13:14:41
  * @LastEditors: JohnnyZou
- * @LastEditTime: 2020-05-15 18:23:58
+ * @LastEditTime: 2020-07-04 18:36:23
  -->
 <template>
 	<div class="wrapper">
@@ -146,7 +146,7 @@ export default {
 			this.threeMapInstance.labelRenderer.setSize(this.$refs.mapContainer.offsetWidth, window.innerHeight);
 		},
 		createThreeMap() {
-			const threeMapInstance = new threeMap.CreateMapFromGeoJson({
+			const threeMapInstance = new threeMap.CreateMap({
 				renderWidth: this.$refs.mapContainer.offsetWidth,
 				renderHeight: window.innerHeight,
 				isStatsWatch: true,
@@ -252,8 +252,8 @@ export default {
 					message: `请至少选择一种点位类型`
 				});
 			}
-			const x = Number(this.selectedObj.point.x.toFixed(2));
-			const y = Number(this.selectedObj.point.y.toFixed(2));
+			const x = Number(this.selectedObj.point.x);
+			const y = Number(this.selectedObj.point.y);
 			// 给对应mesh的userData添加对应类行的点
 			const pointObj = this.currentEditAreaMesh.userData[this.form.pointType]
 			const pointCSS2DObject = this.currentEditAreaMesh.children.filter(obj => {
@@ -264,7 +264,6 @@ export default {
 				name: this.pointName,
 				value: [x, y]
 			};
-			debugger
 			if (this.threeMapInstance) {
 				this.threeMapInstance.updateAreaPoints(this.currentEditAreaMesh, {
 					...this.form,

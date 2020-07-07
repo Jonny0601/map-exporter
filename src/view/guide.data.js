@@ -3,16 +3,17 @@
  * @version: 
  * @Author: JohnnyZou
  * @Date: 2020-02-18 17:49:01
- * @LastEditors  : JohnnyZou
- * @LastEditTime : 2020-02-19 10:33:58
+ * @LastEditors: JohnnyZou
+ * @LastEditTime: 2020-07-06 16:42:11
  */
 export default [
     {
-        title: "导入geojson文件",
-        desc: `首先准备好一份geojson地理信息文件，geojson获取地址<a target="_blank" href="https://hxkj.vip/demo/echartsMap/">https://hxkj.vip/demo/echartsMap/</a>，
-        或者通过<a target="_blank" href="https://labs.mapbox.com/svg-to-geojson/">https://labs.mapbox.com/svg-to-geojson/</a>网站用svg制作一份geojson`,
+        title: "导入文件",
+        desc: `目前支持的文件类型为：geojson、svg和glb或者gltf文件。行政区geojson文件获取地址<a target="_blank" href="https://hxkj.vip/demo/echartsMap/">https://hxkj.vip/demo/echartsMap/</a>，
+        或者通过<a target="_blank" href="https://labs.mapbox.com/svg-to-geojson/">https://labs.mapbox.com/svg-to-geojson/</a>网站用svg制作一份geojson。如果要导入模型，则该模型一定是之前通过此
+        工具导出的模型，否则无法生成行政区块，导入模型一般是在原来的模型基础上做修改。`,
         imgList:[{
-            imgDesc: `将准备好geojson文件拖入此区域，或者点击上传`,
+            imgDesc: `将准备好源文件文件拖入此区域，或者点击上传`,
             url: require("../assets/image/guide/1.jpg"), 
         },{
             imgDesc: `此时场景出现地图样子，通过场景右上方的配置框可以配置地图名称和整体样式`,
